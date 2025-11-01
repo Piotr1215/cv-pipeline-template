@@ -4,6 +4,14 @@
 
 Automated CV generation pipeline that creates multiple psychologically-optimized CV variants from YAML data.
 
+## Video Tutorial
+
+Watch the complete walkthrough of this CV pipeline template:
+
+[![CV Pipeline as Code: LaTeX, YAML, and GitHub Actions](https://img.youtube.com/vi/S2gpOr-mbf4/maxresdefault.jpg)](https://youtu.be/S2gpOr-mbf4)
+
+**CV Pipeline as Code: LaTeX, YAML, and GitHub Actions** - Learn how to use this template to automate your CV generation workflow.
+
 ## Why This Approach?
 
 **The AI Trap**: Most people use AI wrong for CVs
