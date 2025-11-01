@@ -66,7 +66,7 @@ def check_experience(data: Dict, pdf_text: str, variant: str) -> List[str]:
     issues = []
     pdf_normalized = normalize_text(pdf_text)
 
-    for idx, job in enumerate(data['experience'][:6]):  # Templates show first 6
+    for idx, job in enumerate(data['experience'][:3]):  # Templates show first 3 for single-page layout
         job_title = normalize_text(job['title'])
         company = normalize_text(job['company'])
 
@@ -130,7 +130,8 @@ def check_certifications(data: Dict, pdf_text: str, variant: str) -> List[str]:
     pdf_normalized = normalize_text(pdf_text)
 
     # Developer advocate template limits to first 5 certifications
-    cert_limit = 5 if variant == 'devops-engineer' else len(data['certifications'])
+    # All variants now show only first 4 certifications for single-page layout
+    cert_limit = 4
 
     for cert in data['certifications'][:cert_limit]:
         cert_name = normalize_text(cert['name'])
@@ -169,9 +170,8 @@ def check_strengths(data: Dict, pdf_text: str, variant: str) -> List[str]:
     issues = []
     pdf_normalized = normalize_text(pdf_text)
 
-    # Templates show different number of strengths
-    # engineering-manager: first 4, devops-engineer: first 3, platform-engineer: first 4
-    strength_limit = 3 if variant == 'devops-engineer' else 4
+    # All variants now show 3 strengths for single-page layout
+    strength_limit = 3
 
     for strength in data['strengths'][:strength_limit]:
         title_normalized = normalize_text(strength['title'])
@@ -187,9 +187,9 @@ def check_strengths(data: Dict, pdf_text: str, variant: str) -> List[str]:
         if not title_found:
             issues.append(f"Missing strength title: {strength['title']}")
 
-        # Check description is present (at least first 30 chars)
+        # Check description is present (at least first 20 chars to handle line breaks)
         desc = normalize_text(strength['description'])
-        if desc[:30] not in pdf_normalized:
+        if desc[:20] not in pdf_normalized:
             issues.append(f"Missing strength description: {strength['title']}")
 
     return issues

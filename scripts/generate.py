@@ -145,11 +145,11 @@ def generate_software_developer(data: Dict[str, Any]) -> str:
 
     # Professional Experience (first 6)
     latex += "\\cvsection{Professional Experience}\n\n"
-    for job in experience[:6]:
+    for job in experience[:3]:
         latex += f"\\cvevent{{{escape_latex(job['title'])}}}{{{escape_latex(job['company'])}}}"
         latex += f"{{{job['start_date']}--{job['end_date']}}}{{{escape_latex(job['location'])}}}\n"
         latex += "\\begin{itemize}\n"
-        for achievement in job['achievements'][:3]:
+        for achievement in job["achievements"][:2]:
             latex += f"\\item {escape_latex(achievement)}\n"
         latex += "\\end{itemize}\n\n"
         latex += "\\divider\n\n"
@@ -191,7 +191,7 @@ def generate_software_developer(data: Dict[str, Any]) -> str:
 
     # Certifications
     latex += "\\cvsection{Certifications}\n\n"
-    for cert in certifications:
+    for cert in certifications[:4]:
         latex += f"\\cvtag{{{escape_latex(cert['name'])}}}\n"
 
     latex += "\n\\end{paracol}\n\n"
@@ -284,11 +284,11 @@ def generate_devops_engineer(data: Dict[str, Any]) -> str:
 
     # Community & Experience
     latex += "\\cvsection{Community \\& Experience}\n\n"
-    for job in experience[:6]:
+    for job in experience[:3]:
         latex += f"\\cvevent{{{escape_latex(job['title'])}}}{{{escape_latex(job['company'])}}}"
         latex += f"{{{job['start_date']}--{job['end_date']}}}{{{escape_latex(job['location'])}}}\n"
         latex += "\\begin{itemize}\n"
-        for achievement in job['achievements'][:3]:
+        for achievement in job["achievements"][:2]:
             latex += f"\\item {escape_latex(achievement)}\n"
         latex += "\\end{itemize}\n\n"
         latex += "\\divider\n\n"
@@ -328,7 +328,7 @@ def generate_devops_engineer(data: Dict[str, Any]) -> str:
 
     # Certifications (first 5)
     latex += "\\cvsection{Certifications}\n\n"
-    for cert in certifications[:5]:
+    for cert in certifications[:4]:
         latex += f"\\cvtag{{{escape_latex(cert['name'])}}}\n"
 
     latex += "\n\\end{paracol}\n\n"
@@ -422,11 +422,11 @@ def generate_cloud_engineer(data: Dict[str, Any]) -> str:
 
     # Infrastructure Experience
     latex += "\\cvsection{Infrastructure Experience}\n\n"
-    for job in experience[:6]:
+    for job in experience[:3]:
         latex += f"\\cvevent{{{escape_latex(job['title'])}}}{{{escape_latex(job['company'])}}}"
         latex += f"{{{job['start_date']}--{job['end_date']}}}{{{escape_latex(job['location'])}}}\n"
         latex += "\\begin{itemize}\n"
-        for achievement in job['achievements'][:3]:
+        for achievement in job["achievements"][:2]:
             latex += f"\\item {escape_latex(achievement)}\n"
         latex += "\\end{itemize}\n\n"
         latex += "\\divider\n\n"
@@ -435,7 +435,7 @@ def generate_cloud_engineer(data: Dict[str, Any]) -> str:
 
     # Core Competencies (first 4 strengths)
     latex += "\\cvsection{Core Competencies}\n\n"
-    for strength in strengths[:4]:
+    for strength in strengths[:3]:
         latex += f"\\cvachievement{{\\faCogs}}{{{escape_latex(strength['title'])}}}{{{escape_latex(strength['description'])}}}\n\n"
         if strength != strengths[3]:
             latex += "\\divider\n\n"
@@ -465,7 +465,7 @@ def generate_cloud_engineer(data: Dict[str, Any]) -> str:
 
     # Certifications
     latex += "\\cvsection{Certifications}\n\n"
-    for cert in certifications:
+    for cert in certifications[:4]:
         latex += f"\\cvtag{{{escape_latex(cert['name'])}}}\n"
 
     latex += "\n\\end{paracol}\n\n"
