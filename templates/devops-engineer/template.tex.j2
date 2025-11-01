@@ -1,0 +1,146 @@
+{% raw %}\documentclass[10pt,a4paper,withhyper]{altacv}
+
+% Provide path to altacv.cls
+\makeatletter
+\def\input@path{{../altacv-class/}}
+\makeatother
+
+\geometry{left=1cm,right=1cm,top=1.5cm,bottom=1.5cm,columnsep=1.5cm}
+
+\usepackage{paracol}
+
+\iftutex
+  \setmainfont{Lato}
+  \setsansfont{Lato}
+  \renewcommand{\familydefault}{\sfdefault}
+\else
+  \usepackage[defaultsans]{lato}
+  \renewcommand{\familydefault}{\sfdefault}
+\fi
+
+% DEVELOPER ADVOCATE: Approachable & Engaging
+% Colors: Warm, friendly, energetic
+\definecolor{SlateGrey}{HTML}{2E2E2E}
+\definecolor{LightGrey}{HTML}{666666}
+\definecolor{EnergeticOrange}{HTML}{ff6b35}     % Vibrant orange - energy/creativity
+\definecolor{FriendlyTeal}{HTML}{00d9ff}        % Bright teal - approachability
+\definecolor{CommunityPurple}{HTML}{7c3aed}     % Purple - creativity/community
+\colorlet{name}{EnergeticOrange}
+\colorlet{tagline}{CommunityPurple}
+\colorlet{heading}{EnergeticOrange}
+\colorlet{headingrule}{FriendlyTeal}
+\colorlet{subheading}{CommunityPurple}
+\colorlet{accent}{FriendlyTeal}
+\colorlet{emphasis}{SlateGrey}
+\colorlet{body}{LightGrey}
+
+% Friendly, approachable fonts - all sans-serif, lighter weight
+\renewcommand{\namefont}{\Huge\sffamily\bfseries}
+\renewcommand{\personalinfofont}{\small}
+\renewcommand{\cvsectionfont}{\Large\sffamily\bfseries}
+\renewcommand{\cvsubsectionfont}{\large\sffamily}
+
+% Friendlier markers
+\renewcommand{\cvItemMarker}{{\small\textbullet}}
+\renewcommand{\cvRatingMarker}{\faCircle}
+
+\begin{document}
+\name{{% endraw %}{{ personal.first_name }} {{ personal.last_name }}{% raw %}}
+\tagline{{% endraw %}{{ personal.taglines['developer-advocate'] }}{% raw %}}
+
+\personalinfo{%
+  \email{{% endraw %}{{ personal.email }}{% raw %}}
+  \phone{{% endraw %}{{ personal.phone }}{% raw %}}
+  \location{{% endraw %}{{ personal.location }}{% raw %}}
+  \homepage{{% endraw %}{{ personal.website | replace('https://', '') | replace('http://', '') }}{% raw %}}
+  \linkedin{{% endraw %}{{ personal.linkedin | replace('https://www.linkedin.com/in/', '') | replace('https://linkedin.com/in/', '') | replace('/', '') }}{% raw %}}
+  \github{{% endraw %}{{ personal.github | replace('https://github.com/', '') | replace('/', '') }}{% raw %}}
+}
+
+\makecvheader
+
+\columnratio{0.6}
+
+\begin{paracol}{2}
+
+\cvsection{About Me}
+
+{% endraw %}{{ strengths[0].description | escape_latex if strengths else "Passionate developer advocate focused on building vibrant communities and creating engaging technical content." }}{% raw %}
+
+\medskip
+
+\cvsection{Community \& Experience}
+
+{% endraw %}
+{% for job in experience[:6] -%}
+
+{% raw %}\cvevent{{% endraw %}{{ job.title | escape_latex }}{% raw %}}{{% endraw %}{{ job.company | escape_latex }}{% raw %}}{{% endraw %}{{ job.start_date }}--{{ job.end_date }}{% raw %}}{{% endraw %}{{ job.location | escape_latex }}{% raw %}}
+\begin{itemize}
+{% endraw %}
+{% for achievement in job.achievements[:3] -%}
+{% raw %}\item {% endraw %}{{ achievement | escape_latex }}
+{% endfor -%}
+{% raw %}\end{itemize}
+
+\divider
+
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\switchcolumn
+
+\cvsection{What I Bring}
+
+{% endraw %}
+{% for strength in strengths[:3] -%}
+{% raw %}\cvachievement{\faHeart}{{% endraw %}{{ strength.title | escape_latex }}{% raw %}}{{% endraw %}{{ strength.description | escape_latex }}{% raw %}}
+
+{% endraw %}{% if not loop.last %}{% raw %}\divider
+
+{% endraw %}{% endif %}
+{% endfor -%}
+
+{% raw %}\cvsection{Tech Stack}
+
+{% endraw %}
+{% for skill in skills['Programming Languages'] -%}
+{% raw %}\cvtag{{% endraw %}{{ skill | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\divider\smallskip
+
+{% endraw %}
+{% for skill in skills['DevOps and Cloud Technologies'] -%}
+{% raw %}\cvtag{{% endraw %}{{ skill | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\divider\smallskip
+
+\cvtag{Content Creation}
+\cvtag{Public Speaking}
+\cvtag{Community Building}
+\cvtag{Technical Writing}
+
+\cvsection{Education}
+
+{% endraw %}
+{% for edu in education -%}
+{% raw %}\cvevent{{% endraw %}{{ edu.degree | escape_latex }}{% raw %}}{{% endraw %}{{ edu.institution | escape_latex }}{% raw %}}{{% endraw %}{{ edu.start_date }}--{{ edu.end_date }}{% raw %}}{{% endraw %}{{ edu.location | escape_latex }}{% raw %}}
+
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\cvsection{Certifications}
+
+{% endraw %}
+{% for cert in certifications[:5] -%}
+{% raw %}\cvtag{{% endraw %}{{ cert.name | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\end{paracol}
+
+\end{document}
+{% endraw %}

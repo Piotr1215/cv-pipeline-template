@@ -1,0 +1,155 @@
+{% raw %}\documentclass[10pt,a4paper,withhyper]{altacv}
+
+% Provide path to altacv.cls
+\makeatletter
+\def\input@path{{../altacv-class/}}
+\makeatother
+
+\geometry{left=1cm,right=1cm,top=1.5cm,bottom=1.5cm,columnsep=1.5cm}
+
+\usepackage{paracol}
+
+\iftutex
+  \setmainfont{Roboto}
+  \setsansfont{Roboto}
+  \setmonofont{Roboto Mono}
+  \renewcommand{\familydefault}{\sfdefault}
+\else
+  \usepackage{roboto}
+  \usepackage[T1]{fontenc}
+  \renewcommand{\familydefault}{\sfdefault}
+\fi
+
+% PLATFORM ENGINEER: Stability & Precision
+% Colors: Industrial, technical, reliable
+\definecolor{SlateGrey}{HTML}{2E2E2E}
+\definecolor{LightGrey}{HTML}{666666}
+\definecolor{SteelBlue}{HTML}{4682b4}          % Steel blue - reliability
+\definecolor{IndustrialGrey}{HTML}{6c757d}     % Grey - precision/technical
+\definecolor{SystemGreen}{HTML}{059669}        % Muted green - stability/health
+\colorlet{name}{SlateGrey}
+\colorlet{tagline}{SteelBlue}
+\colorlet{heading}{SteelBlue}
+\colorlet{headingrule}{IndustrialGrey}
+\colorlet{subheading}{SteelBlue}
+\colorlet{accent}{SystemGreen}
+\colorlet{emphasis}{SlateGrey}
+\colorlet{body}{LightGrey}
+
+% Technical, precise fonts - monospace accents
+\renewcommand{\namefont}{\Huge\sffamily\bfseries}
+\renewcommand{\personalinfofont}{\footnotesize\ttfamily}
+\renewcommand{\cvsectionfont}{\LARGE\sffamily\bfseries}
+\renewcommand{\cvsubsectionfont}{\large\sffamily\bfseries}
+
+% Technical markers
+\renewcommand{\cvItemMarker}{{\small\textbullet}}
+\renewcommand{\cvRatingMarker}{\faCircle}
+
+\begin{document}
+\name{{% endraw %}{{ personal.first_name }} {{ personal.last_name }}{% raw %}}
+\tagline{{% endraw %}{{ personal.taglines['platform-engineer'] }}{% raw %}}
+
+\personalinfo{%
+  \email{{% endraw %}{{ personal.email }}{% raw %}}
+  \phone{{% endraw %}{{ personal.phone }}{% raw %}}
+  \location{{% endraw %}{{ personal.location }}{% raw %}}
+  \homepage{{% endraw %}{{ personal.website | replace('https://', '') | replace('http://', '') }}{% raw %}}
+  \linkedin{{% endraw %}{{ personal.linkedin | replace('https://www.linkedin.com/in/', '') | replace('https://linkedin.com/in/', '') | replace('/', '') }}{% raw %}}
+  \github{{% endraw %}{{ personal.github | replace('https://github.com/', '') | replace('/', '') }}{% raw %}}
+}
+
+\makecvheader
+
+\columnratio{0.6}
+
+\begin{paracol}{2}
+
+\cvsection{Technical Profile}
+
+{% endraw %}{{ strengths[0].description | escape_latex if strengths else "Platform engineer focused on building reliable, scalable infrastructure with emphasis on operational excellence." }}{% raw %}
+
+\medskip
+
+\cvsection{Infrastructure Experience}
+
+{% endraw %}
+{% for job in experience[:6] -%}
+
+{% raw %}\cvevent{{% endraw %}{{ job.title | escape_latex }}{% raw %}}{{% endraw %}{{ job.company | escape_latex }}{% raw %}}{{% endraw %}{{ job.start_date }}--{{ job.end_date }}{% raw %}}{{% endraw %}{{ job.location | escape_latex }}{% raw %}}
+\begin{itemize}
+{% endraw %}
+{% for achievement in job.achievements[:3] -%}
+{% raw %}\item {% endraw %}{{ achievement | escape_latex }}
+{% endfor -%}
+{% raw %}\end{itemize}
+
+\divider
+
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\switchcolumn
+
+\cvsection{Core Competencies}
+
+{% endraw %}
+{% for strength in strengths[:4] -%}
+{% raw %}\cvachievement{\faCogs}{{% endraw %}{{ strength.title | escape_latex }}{% raw %}}{{% endraw %}{{ strength.description | escape_latex }}{% raw %}}
+
+{% endraw %}{% if not loop.last %}{% raw %}\divider
+
+{% endraw %}{% endif %}
+{% endfor -%}
+
+{% raw %}\cvsection{Technical Stack}
+
+\textbf{Languages}
+
+{% endraw %}
+{% for skill in skills['Programming Languages'] -%}
+{% raw %}\cvtag{{% endraw %}{{ skill | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\divider\smallskip
+
+\textbf{Infrastructure \& Cloud}
+
+{% endraw %}
+{% for skill in skills['DevOps and Cloud Technologies'] -%}
+{% raw %}\cvtag{{% endraw %}{{ skill | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\divider\smallskip
+
+\textbf{Cloud Platforms}
+
+{% endraw %}
+{% for skill in skills['Cloud Platforms'] -%}
+{% raw %}\cvtag{{% endraw %}{{ skill | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\cvsection{Education}
+
+{% endraw %}
+{% for edu in education -%}
+{% raw %}\cvevent{{% endraw %}{{ edu.degree | escape_latex }}{% raw %}}{{% endraw %}{{ edu.institution | escape_latex }}{% raw %}}{{% endraw %}{{ edu.start_date }}--{{ edu.end_date }}{% raw %}}{{% endraw %}{{ edu.location | escape_latex }}{% raw %}}
+
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\cvsection{Certifications}
+
+{% endraw %}
+{% for cert in certifications -%}
+{% raw %}\cvtag{{% endraw %}{{ cert.name | escape_latex }}{% raw %}}
+{% endraw %}
+{% endfor -%}
+
+{% raw %}\end{paracol}
+
+\end{document}
+{% endraw %}

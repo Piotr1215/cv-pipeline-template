@@ -1,0 +1,47 @@
+- title: "Senior DevOps Engineer"
+  company: "Tech Corp Inc"
+  location: "Remote"
+  start_date: "01/2022"
+  end_date: "present"
+  tags: ["devops", "cloud"]
+  achievements:
+    - "Architected and maintained Kubernetes infrastructure supporting 100+ microservices"
+    - "Implemented GitOps workflows with ArgoCD, reducing deployment time by 60%"
+    - "Automated CI/CD pipelines with GitHub Actions and Terraform"
+    - "Reduced cloud infrastructure costs by 35% through optimization"
+
+- title: "Cloud Engineer"
+  company: "Cloud Solutions LLC"
+  location: "San Francisco, CA"
+  start_date: "03/2020"
+  end_date: "12/2021"
+  tags: ["cloud", "development"]
+  achievements:
+    - "Designed and deployed scalable AWS infrastructure using Terraform"
+    - "Migrated legacy applications to cloud-native architecture"
+    - "Implemented monitoring and alerting with CloudWatch and Prometheus"
+    - "Created infrastructure documentation and runbooks"
+
+- title: "Software Developer"
+  company: "StartUp XYZ"
+  location: "Remote"
+  start_date: "06/2018"
+  end_date: "02/2020"
+  tags: ["development", "devops"]
+  achievements:
+    - "Built RESTful APIs serving 1M+ requests/day using Python and PostgreSQL"
+    - "Developed web applications with React and Node.js"
+    - "Implemented automated testing and code quality checks"
+    - "Participated in agile development and sprint planning"
+
+- title: "Junior Software Developer"
+  company: "Digital Solutions Inc"
+  location: "New York, NY"
+  start_date: "01/2017"
+  end_date: "05/2018"
+  tags: ["development"]
+  achievements:
+    - "Developed features for web applications using JavaScript and React"
+    - "Wrote unit tests and participated in code reviews"
+    - "Fixed bugs and improved application performance"
+    - "Collaborated with senior developers on technical designs"

@@ -1,0 +1,140 @@
+{% raw %}\documentclass[10pt,A4]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{xifthen}
+\usepackage[thin]{roboto}
+\renewcommand*\familydefault{\sfdefault}
+\usepackage[T1]{fontenc}
+\usepackage{moresize}
+\usepackage[a4paper]{geometry}
+\geometry{top=1.75cm, bottom=-.6cm, left=1.5cm, right=1.5cm}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\setlength{\headheight}{-5pt}
+\lhead{}
+\chead{\small{{% endraw %}{{ personal.first_name }} {{ personal.last_name }}{% raw %}  $\cdot$ {% endraw %}{{ personal.taglines['engineering-manager'] }}{% raw %} $\cdot$ {% endraw %}{{ personal.location }}{% raw %} $\cdot$ \textcolor{sectcol}{\textbf{ {% endraw %}{{ personal.email }}{% raw %} }} $\cdot$ {% endraw %}{{ personal.phone }}{% raw %}}}
+\rhead{}
+\setlength{\parindent}{0mm}
+\usepackage{multicol}
+\usepackage{multirow}
+\usepackage{array}
+\newcolumntype{x}[1]{>{\raggedleft\hspace{0pt}}p{#1}}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{shapes, backgrounds,mindmap, trees}
+\usepackage{color}
+
+\definecolor{bgcol}{RGB}{13,92,127}
+\definecolor{sectcol}{RGB}{204,110,0}
+\definecolor{softcol}{RGB}{225,225,225}
+
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\renewcommand{\thepage}{}
+\renewcommand{\thesection}{}
+
+\newcommand{\tzlarrow}{(0,0) -- (0.2,0) -- (0.3,0.2) -- (0.2,0.4) -- (0,0.4) -- (0.1,0.2) -- cycle;}
+\newcommand{\larrow}[1]{\begin{tikzpicture}[scale=0.58]
+     \filldraw[fill=#1!100,draw=#1!100!black]  \tzlarrow
+ \end{tikzpicture}}
+
+\newcommand{\tzrarrow}{ (0,0.2) -- (0.1,0) -- (0.3,0) -- (0.2,0.2) -- (0.3,0.4) -- (0.1,0.4) -- cycle;}
+\newcommand{\rarrow}{\begin{tikzpicture}[scale=0.7]
+    \filldraw[fill=sectcol!100,draw=sectcol!100!black] \tzrarrow
+ \end{tikzpicture}}
+
+\newcommand{\cvsection}[1]{
+\colorbox{bgcol}{\makebox[1\linewidth][l]{
+    \larrow{sectcol} \hspace{-8pt} \larrow{sectcol} \hspace{-8pt} \larrow{sectcol} \textcolor{white}{\textbf{#1}}\hspace{4pt}
+}}\\}
+
+\newcommand{\metasection}[2]{
+    \begin{tabular*}{1\linewidth}{p{0.18\linewidth} p{0.76\linewidth}}
+        \larrow{bgcol}\normalsize{\textbf{\textcolor{sectcol}{#1}}}&#2\\
+    \end{tabular*}
+}
+
+\newcommand{\cvevent}[5] {
+\begin{flushleft}
+\textcolor{sectcol}{#1 - #3}\\
+\textbf{#2}\\[-7pt]
+\textcolor{softcol}{\hrule}
+\vspace{7pt}
+\begin{tabular*}{1\linewidth}{p{0.001\linewidth} p{0.9\linewidth}}
+    \larrow{bgcol} & #4 \\[2pt]
+    \larrow{bgcol} & #5 \\[7pt]
+\end{tabular*}
+\end{flushleft}
+}
+
+\newcommand{\mystrut}{\rule[-.3\baselineskip]{0pt}{\baselineskip}}
+\newcommand{\spread}{7pt}
+
+\begin{document}
+\pagestyle{fancy}
+
+\begin{minipage}[t]{0.485\textwidth}
+\vspace{\spread}
+\hspace{-0.25\linewidth}\colorbox{bgcol}{\makebox[1.25\linewidth][c]{\HUGE{\textcolor{white}{\textsc{ {% endraw %}{{ personal.first_name }}{% raw %} }} } \textcolor{sectcol}{\rule[-1mm]{1mm}{0.9cm}} \HUGE{\textcolor{white}{\textsc{ {% endraw %}{{ personal.last_name }}{% raw %} }} } }}
+
+\hspace{-0.25\linewidth}\includegraphics[width=1.2725\linewidth]{myfoto.jpg}
+
+\vspace{20pt}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\vspace{\spread}
+
+\cvsection{Summary}\\
+{% endraw %}{{ strengths[0].description | escape_latex if strengths else "Experienced engineering manager with strong technical background and proven leadership skills." }}{% raw %}\\[-2pt]
+\textcolor{softcol}{\hrule}
+\end{minipage}
+
+\begin{minipage}[t]{0.485\textwidth}
+\vspace{\spread}
+
+\metasection{Status:}{ {% endraw %}{{ personal.taglines['engineering-manager'] }}{% raw %}}
+\metasection{Location:}{ {% endraw %}{{ personal.location }}{% raw %}}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\vspace{5pt}
+\metasection{Email:}{ {% endraw %}{{ personal.email }}{% raw %}}
+\metasection{Phone:}{ {% endraw %}{{ personal.phone }}{% raw %}}
+\end{minipage}
+
+\begin{minipage}[t]{0.485\textwidth}
+\vspace{\spread}
+
+\cvsection{Education}
+
+{% endraw %}
+{% for edu in education -%}
+{% raw %}\cvevent{{% endraw %}{{ edu.start_date }}/{{ edu.end_date[:2] }}{% raw %}}{{% endraw %}{{ edu.degree | escape_latex }}{% raw %}}{{% endraw %}{{ edu.institution | escape_latex }}{% raw %}}{{% endraw %}{% if edu.specialization %}{{ edu.specialization | escape_latex }}{% endif %}{% raw %}}{{% endraw %}{{ edu.location | escape_latex }}{% raw %}}
+
+{% endraw %}
+{% endfor %}
+{% raw %}\end{minipage}
+\hfill
+\begin{minipage}[t]{0.485\textwidth}
+\vspace{\spread}
+
+\cvsection{Experience}
+
+{% endraw %}
+{% for job in experience[:5] -%}
+{% raw %}\cvevent{{% endraw %}{{ job.start_date }} - {{ job.end_date }}{% raw %}}{{% endraw %}{{ job.title | escape_latex }}{% raw %}}{{% endraw %}{{ job.company | escape_latex }}{% raw %}}{{% endraw %}{{ job.achievements[0] | escape_latex if job.achievements else "" }}{% raw %}}{{% endraw %}{{ job.achievements[1] | escape_latex if job.achievements|length > 1 else "" }}{% raw %}}
+
+{% endraw %}
+{% endfor %}
+{% raw %}\end{minipage}
+
+\null
+\vspace*{\fill}
+\hspace{-0.25\linewidth}\colorbox{bgcol}{\makebox[1.5\linewidth][c]{\mystrut  \textcolor{white}{ {% endraw %}{{ personal.website }}{% raw %}} $\cdot$ \textcolor{white}{ {% endraw %}{{ personal.github }}{% raw %}}}}
+
+\end{document}
+{% endraw %}

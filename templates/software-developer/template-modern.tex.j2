@@ -1,0 +1,105 @@
+{% raw %}% !TeX program = xelatex
+\documentclass{my_cv}
+\title{Resume}
+\author{{% endraw %}{{ personal.first_name }} {{ personal.last_name }}{% raw %}}
+\date{\today}
+\usepackage[a4paper, left=2em, right=2em, top=2.5em, bottom=0em]{geometry}
+\usepackage{multicol}
+\setlength{\columnsep}{0cm}
+\usepackage{xcolor}
+\usepackage{fontspec}
+\usepackage{setspace}
+\usepackage[none]{hyphenat}
+\usepackage{changepage}
+\usepackage{hyperref}
+
+\defaultfontfeatures{LetterSpace=2.5}
+
+\hypersetup{
+    unicode=true,
+    colorlinks=true,
+    urlcolor=black,
+}
+
+% Use system fonts instead of custom fonts
+\setmainfont{Liberation Sans}
+
+\begin{document}
+
+\begin{multicols}{3}
+    \headerSection{\badge{flashyGreen}{\Large {\textbf{{% endraw %}{{ personal.taglines['engineering-manager'] }}{% raw %}}}}}
+    \columnbreak
+    \headerSection{\xhrulefill{black}{0.6em}}
+    \columnbreak
+    \headerSection{\xhrulefill{black}{0.6em}}
+\end{multicols}
+
+\begin{multicols}{2}
+    \headerSection{\Huge \textbf{{% endraw %}{{ personal.first_name }} \newline {{ personal.last_name }}{% raw %}}}
+    \cvParagraph{\href{tel:{% endraw %}{{ personal.phone }}{% raw %}}{{% endraw %}{{ personal.phone }}{% raw %}} \newline \href{mailto:{% endraw %}{{ personal.email }}{% raw %}}{{% endraw %}{{ personal.email }}{% raw %}} \newline \href{{% endraw %}{{ personal.github }}{% raw %}}{{% endraw %}{{ personal.github | replace('https://', '') }}{% raw %}} \newline \href{{% endraw %}{{ personal.linkedin }}{% raw %}}{LinkedIn} \newline {% endraw %}{{ personal.location }}{% raw %}}
+
+    \columnbreak
+    \begin{spacing}{1.5}
+        {% endraw %}{% if strengths and strengths|length > 0 %}{{ strengths[0].description | escape_latex }}{% endif %}{% raw %}
+    \end{spacing}
+\end{multicols}
+
+\vspace{1em}
+\setlength{\columnsep}{1cm}
+
+\cvSection{Work Experience}
+\begin{adjustwidth}{2em}{0em}
+
+{% endraw %}
+{% for job in experience -%}
+{% raw %}\positionAndCompanyLine{{% endraw %}{{ job.title | escape_latex }}{% raw %}}{{% endraw %}{{ job.company | escape_latex }}{% raw %}}{{% endraw %}{{ job.start_date }}--{{ job.end_date }}{% raw %}}{% endraw %}
+{% raw %}\begin{flushleft}{\badge{lavenderBlue}{Key Achievements}}\end{flushleft}{% endraw %}
+{% raw %}\begin{itemize}{% endraw %}
+{% for achievement in job.achievements -%}
+{% raw %}\item {% endraw %}{{ achievement | escape_latex }}
+{% endfor -%}
+{% raw %}\end{itemize}{% endraw %}
+{% raw %}\vspace{0.5em}{% endraw %}
+
+{% endfor %}
+{% raw %}\end{adjustwidth}
+
+\vspace{1em}
+
+\cvSection{Education}
+\begin{adjustwidth}{2em}{0em}
+
+{% endraw %}
+{% for edu in education -%}
+{% raw %}\positionAndCompanyLine{{% endraw %}{{ edu.degree | escape_latex }}{% if edu.specialization %} ({{ edu.specialization | escape_latex }}){% endif %}{% raw %}}{{% endraw %}{{ edu.institution | escape_latex }}{% raw %}}{{% endraw %}{{ edu.start_date }}--{{ edu.end_date }}{% raw %}}{% endraw %}
+
+{% endfor %}
+{% raw %}\end{adjustwidth}
+\vspace{1em}
+
+\begin{multicols}{2}
+    \cvSection{Key Strengths}
+    \begin{adjustwidth}{1em}{0em}
+    {% endraw %}
+{% for strength in strengths -%}
+    {% raw %}\textbf{{% endraw %}{{ strength.title | escape_latex }}{% raw %}:} {% endraw %}{{ strength.description | escape_latex }}
+    {% raw %}\newline{% endraw %}
+{% endfor %}
+    {% raw %}\end{adjustwidth}
+
+    \columnbreak
+
+    \cvSection{Skills \& Certifications}
+    \begin{adjustwidth}{1em}{0em}
+    {% endraw %}
+{% for category, skills_list in skills.items() -%}
+    {% raw %}\textbf{{% endraw %}{{ category | escape_latex }}{% raw %}:} {% endraw %}{{ skills_list | join(', ') | escape_latex }}
+    {% raw %}\newline{% endraw %}
+{% endfor %}
+    {% raw %}\vspace{0.5em}
+    \textbf{Certifications:} {% endraw %}{{ certifications | map(attribute='name') | join(', ') | escape_latex }}{% raw %}
+    \end{adjustwidth}
+\end{multicols}
+
+\end{document}
+{% endraw %}

@@ -1,0 +1,122 @@
+{% raw %}\documentclass[10pt,a4paper,withhyper]{altacv}
+
+% Provide path to altacv.cls
+\makeatletter
+\def\input@path{{../altacv-class/}}
+\makeatother
+
+\geometry{left=1.25cm,right=1.25cm,top=1.5cm,bottom=1.5cm,columnsep=1.2cm}
+
+\usepackage{paracol}
+
+\iftutex
+  \setmainfont{Roboto Slab}
+  \setsansfont{Lato}
+  \renewcommand{\familydefault}{\sfdefault}
+\else
+  \usepackage[rm]{roboto}
+  \usepackage[defaultsans]{lato}
+  \renewcommand{\familydefault}{\sfdefault}
+\fi
+
+% Color scheme
+\definecolor{SlateGrey}{HTML}{2E2E2E}
+\definecolor{LightGrey}{HTML}{666666}
+\definecolor{DarkPastelRed}{HTML}{450808}
+\definecolor{PastelRed}{HTML}{8F0D0D}
+\definecolor{GoldenEarth}{HTML}{E7D192}
+\colorlet{name}{black}
+\colorlet{tagline}{PastelRed}
+\colorlet{heading}{DarkPastelRed}
+\colorlet{headingrule}{GoldenEarth}
+\colorlet{subheading}{PastelRed}
+\colorlet{accent}{PastelRed}
+\colorlet{emphasis}{SlateGrey}
+\colorlet{body}{LightGrey}
+
+% Fonts
+\renewcommand{\namefont}{\Huge\rmfamily\bfseries}
+\renewcommand{\personalinfofont}{\footnotesize}
+\renewcommand{\cvsectionfont}{\LARGE\rmfamily\bfseries}
+\renewcommand{\cvsubsectionfont}{\large\bfseries}
+
+% Markers
+\renewcommand{\cvItemMarker}{{\small\textbullet}}
+\renewcommand{\cvRatingMarker}{\faCircle}
+
+\begin{document}
+\name{{% endraw %}{{ personal.first_name }} {{ personal.last_name }}{% raw %}}
+\tagline{{% endraw %}{{ personal.taglines['engineering-manager'] }}{% raw %}}
+
+\personalinfo{%
+  \email{{% endraw %}{{ personal.email }}{% raw %}}
+  \phone{{% endraw %}{{ personal.phone }}{% raw %}}
+  \location{{% endraw %}{{ personal.location }}{% raw %}}
+  \homepage{{% endraw %}{{ personal.website | replace('https://', '') | replace('http://', '') }}{% raw %}}
+  \linkedin{{% endraw %}{{ personal.linkedin | replace('https://www.linkedin.com/in/', '') | replace('/', '') }}{% raw %}}
+  \github{{% endraw %}{{ personal.github | replace('https://github.com/', '') | replace('/', '') }}{% raw %}}
+}
+
+\makecvheader
+
+\columnratio{0.6}
+
+\begin{paracol}{2}
+\cvsection{Work Experience}
+
+{% endraw %}{% for job in experience -%}
+{% raw %}\cvevent{{% endraw %}{{ job.title | escape_latex }}{% raw %}}{{% endraw %}{{ job.company | escape_latex }}{% raw %}}{{% endraw %}{{ job.start_date }}--{{ job.end_date }}{% raw %}}{{% endraw %}{{ job.location | escape_latex }}{% raw %}}
+\begin{itemize}
+{% endraw %}{% for achievement in job.achievements -%}
+{% raw %}\item {% endraw %}{{ achievement | escape_latex }}
+{% endfor -%}
+{% raw %}\end{itemize}
+
+{% endraw %}{% if not loop.last %}{% raw %}\divider
+
+{% endraw %}{% endif %}
+{% endfor %}
+{% raw %}\switchcolumn
+
+\cvsection{Key Strengths}
+
+{% endraw %}{% for strength in strengths -%}
+{% raw %}\cvachievement{\faTrophy}{{% endraw %}{{ strength.title | escape_latex }}{% raw %}}{{% endraw %}{{ strength.description | escape_latex }}{% raw %}}
+
+{% endraw %}{% if not loop.last %}{% raw %}\divider
+
+{% endraw %}{% endif %}
+{% endfor %}
+{% raw %}\cvsection{Skills}
+
+{% endraw %}{% for category, skills_list in skills.items() -%}
+{% raw %}\cvtag{{% endraw %}{{ category | escape_latex }}{% raw %}}
+{% endraw %}{% endfor %}
+{% raw %}\divider\smallskip
+
+{% endraw %}{% for skill in skills['Programming Languages'] -%}
+{% raw %}\cvtag{{% endraw %}{{ skill | escape_latex }}{% raw %}}
+{% endraw %}{% endfor %}
+{% raw %}\divider\smallskip
+
+{% endraw %}{% for tech in skills['DevOps and Cloud Technologies'] -%}
+{% raw %}\cvtag{{% endraw %}{{ tech | escape_latex }}{% raw %}}
+{% endraw %}{% endfor %}
+{% raw %}\cvsection{Education}
+
+{% endraw %}{% for edu in education -%}
+{% raw %}\cvevent{{% endraw %}{{ edu.degree | escape_latex }}{% if edu.specialization %} ({{ edu.specialization | escape_latex }}){% endif %}{% raw %}}{{% endraw %}{{ edu.institution | escape_latex }}{% raw %}}{{% endraw %}{{ edu.start_date }}--{{ edu.end_date }}{% raw %}}{{% endraw %}{{ edu.location | escape_latex }}{% raw %}}
+
+{% endraw %}{% if not loop.last %}{% raw %}\divider
+
+{% endraw %}{% endif %}
+{% endfor %}
+{% raw %}\cvsection{Certifications}
+
+{% endraw %}{% for cert in certifications -%}
+{% raw %}\cvtag{{% endraw %}{{ cert.name | escape_latex }}{% raw %}}
+{% endraw %}{% endfor %}
+{% raw %}\end{paracol}
+
+\end{document}
+{% endraw %}

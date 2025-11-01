@@ -1,0 +1,19 @@
+- title: "Full-Stack Development"
+  description: "Proficient in both frontend and backend development with modern frameworks and languages. Built responsive web applications and scalable APIs that deliver excellent user experiences."
+  tags: ["development"]
+
+- title: "Cloud Infrastructure and DevOps"
+  description: "Expert in designing and maintaining cloud infrastructure on AWS, GCP, and Azure. Implemented CI/CD pipelines, infrastructure as code, and automated deployment processes that improved reliability and speed."
+  tags: ["devops", "cloud"]
+
+- title: "Problem Solving and Debugging"
+  description: "Strong analytical skills for troubleshooting complex technical issues. Systematic approach to identifying root causes and implementing effective solutions quickly."
+  tags: ["development", "devops"]
+
+- title: "Automation and Efficiency"
+  description: "Passionate about automating repetitive tasks and improving developer workflows. Implemented tools and scripts that reduced manual work and increased team productivity."
+  tags: ["devops"]
+
+- title: "Collaboration and Communication"
+  description: "Effective team player with strong communication skills. Experience working in agile environments, participating in code reviews, and collaborating across teams to deliver projects."
+  tags: ["development", "cloud"]

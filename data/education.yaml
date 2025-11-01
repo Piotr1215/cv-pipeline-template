@@ -1,0 +1,12 @@
+- degree: "Master's in Computer Science"
+  specialization: "Distributed Systems"
+  institution: "State University"
+  location: "Boston, MA"
+  start_date: "2013"
+  end_date: "2015"
+
+- degree: "Bachelor's in Software Engineering"
+  institution: "Technical University"
+  location: "Seattle, WA"
+  start_date: "2009"
+  end_date: "2013"

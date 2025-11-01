@@ -1,0 +1,101 @@
+name: Build CV PDFs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/**'                  # YAML data files
+      - 'templates/**'             # Jinja2 templates
+      - 'scripts/generate.py'      # Generation script
+      - '.github/workflows/cv-build.yml'
+  workflow_dispatch:               # Manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/xu-cheng/texlive-debian:latest
+    strategy:
+      matrix:
+        variant:
+          - software-developer
+          - devops-engineer
+          - cloud-engineer
+      fail-fast: false             # From Phase 1 feedback
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Install Python and tools in container
+      - name: Install Python and dependencies
+        run: |
+          apt-get update
+          apt-get install -y python3 python3-pip poppler-utils
+          pip3 install Jinja2 PyYAML --break-system-packages
+
+      # Generate .tex from YAML
+      - name: Generate LaTeX from YAML
+        run: |
+          mkdir -p output/generated
+          python3 scripts/generate.py \
+            --variant ${{ matrix.variant }} \
+            --data-dir data/ \
+            --output output/generated/${{ matrix.variant }}.tex
+
+      # Copy LaTeX class files to output directory
+      - name: Copy LaTeX class files
+        run: |
+          cp templates/altacv-class/*.cls output/generated/
+          cp templates/altacv-class/*.cfg output/generated/
+
+      # Compile LaTeX (container has full TeXLive)
+      - name: Compile LaTeX
+        run: |
+          cd output/generated
+          pdflatex -interaction=nonstopmode -halt-on-error ${{ matrix.variant }}.tex
+
+      # Run data completeness tests (for this variant only)
+      - name: Test data completeness
+        run: |
+          python3 scripts/test_data_completeness.py --variant ${{ matrix.variant }}
+
+      # Upload PDF artifact
+      - name: Upload PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: cv-${{ matrix.variant }}
+          path: output/generated/${{ matrix.variant }}.pdf
+          retention-days: 90
+
+  # NEW: Create GitHub Release with all CV PDFs
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: cv-artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: cv-${{ github.run_number }}
+          name: CV Build ${{ github.run_number }}
+          body: |
+            Automated CV build from commit ${{ github.sha }}
+
+            Generated PDFs:
+            - Software Developer CV
+            - DevOps Engineer CV
+            - Cloud Engineer CV
+          files: |
+            cv-artifacts/cv-software-developer/*.pdf
+            cv-artifacts/cv-devops-engineer/*.pdf
+            cv-artifacts/cv-cloud-engineer/*.pdf
+          draft: false
+          prerelease: false
