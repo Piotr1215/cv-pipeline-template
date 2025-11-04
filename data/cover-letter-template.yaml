@@ -1,0 +1,91 @@
+# Cover Letter Template Data
+#
+# This file contains your cover letter building blocks.
+# The generator will combine these based on the role you're applying for.
+
+# Your story - why you're in tech
+origin_story:
+  career_changer: "After 5 years in project management, I transitioned to software engineering because I wanted to build solutions, not just manage them. I completed an intensive bootcamp and have spent the past year building production applications."
+
+  bootcamp_grad: "I discovered my passion for software development through a coding bootcamp, where I built 5 full-stack applications and fell in love with solving complex problems through code."
+
+  student: "Throughout my Computer Science studies, I've been driven by curiosity about how technology can solve real-world problems. My coursework and projects have given me a strong foundation in software development principles."
+
+  self_taught: "I'm a self-taught developer who learned programming through hundreds of hours of online courses, building projects, and contributing to open source. My non-traditional path has taught me resilience and how to learn quickly."
+
+# Why you're excited about THIS company (customize per application)
+company_excitement:
+  mission_driven: "I'm particularly excited about {COMPANY}'s mission to {MISSION}. This aligns perfectly with my values and experience in {RELEVANT_AREA}."
+
+  technical_challenges: "I'm drawn to {COMPANY} because of the technical challenges you're solving around {TECHNICAL_AREA}. Working on {SPECIFIC_PRODUCT/PROJECT} would allow me to apply my skills in {YOUR_SKILLS}."
+
+  product_user: "As a longtime user of {PRODUCT}, I've always admired how {COMPANY} approaches {SPECIFIC_ASPECT}. I'd love to contribute to building features that I and millions of others rely on daily."
+
+  growth_opportunity: "I'm excited about {COMPANY}'s commitment to {LEARNING_CULTURE/MENTORSHIP/GROWTH}. As someone eager to learn and grow, working alongside {SPECIFIC_TEAM} would accelerate my development as an engineer."
+
+  culture: "Your company culture of {CULTURE_ASPECT} resonates deeply with me. I thrive in environments where {YOUR_WORK_STYLE}."
+
+# Your key strengths (choose 2-3 per letter)
+strengths:
+  fast_learner:
+    hook: "I learn quickly and adapt to new technologies rapidly."
+    proof: "In my current role, I learned {TECHNOLOGY} and contributed production code within {TIMEFRAME}."
+
+  problem_solver:
+    hook: "I excel at breaking down complex problems into manageable solutions."
+    proof: "When faced with {SPECIFIC_PROBLEM}, I {YOUR_APPROACH}, resulting in {MEASURABLE_OUTCOME}."
+
+  collaborative:
+    hook: "I believe the best solutions come from diverse perspectives and strong collaboration."
+    proof: "I actively participate in code reviews, provide constructive feedback, and have mentored {NUMBER} junior developers."
+
+  quality_focused:
+    hook: "I'm committed to writing clean, maintainable code with comprehensive testing."
+    proof: "I increased test coverage from {BEFORE}% to {AFTER}%, catching {NUMBER} critical bugs before production."
+
+  user_centric:
+    hook: "I always consider the end-user experience when building features."
+    proof: "By focusing on user feedback, I improved {METRIC} by {PERCENTAGE}, directly impacting {BUSINESS_OUTCOME}."
+
+  ownership:
+    hook: "I take full ownership of projects from concept to deployment."
+    proof: "I led {PROJECT} from initial design through launch, resulting in {OUTCOME}."
+
+  technical_depth:
+    hook: "I invest time in understanding technologies deeply, not just surface-level."
+    proof: "I dove deep into {TECHNOLOGY}, which allowed me to optimize {SPECIFIC_ASPECT} and achieve {RESULT}."
+
+# Relevant projects/experiences (customize with your actual work)
+relevant_experience:
+  - role: "DevOps Engineer"
+    relevance: "building and maintaining CI/CD pipelines"
+    achievement: "Automated deployment pipeline reducing release time from 4 hours to 15 minutes"
+    skills: "GitHub Actions, Docker, Kubernetes"
+
+  - role: "Full-Stack Developer"
+    relevance: "building scalable web applications"
+    achievement: "Built platform serving 50K+ users with 99.9% uptime"
+    skills: "React, Node.js, PostgreSQL, AWS"
+
+  - role: "Cloud Engineer"
+    relevance: "managing cloud infrastructure"
+    achievement: "Designed multi-region AWS architecture supporting 1M+ daily users"
+    skills: "AWS, Terraform, CloudFormation"
+
+# Closing - what you bring to the team
+value_proposition:
+  junior_energy: "While I'm early in my career, I bring fresh perspectives, enthusiasm for learning, and a strong work ethic. I'm ready to contribute from day one while growing into a valuable team member."
+
+  unique_background: "My background in {PREVIOUS_FIELD} gives me unique insights into {HOW_IT_HELPS}. I bring both technical skills and {SOFT_SKILL} that I've developed throughout my career."
+
+  proven_track_record: "My track record of {SPECIFIC_ACHIEVEMENT} demonstrates my ability to {KEY_SKILL}. I'm confident I can bring this same drive and capability to {COMPANY}."
+
+  growth_mindset: "I'm someone who actively seeks feedback, embraces challenges, and is always looking to improve. I believe in continuous learning and would thrive in your team's environment."
+
+# Call to action
+closing:
+  direct: "I'd love to discuss how my experience with {RELEVANT_SKILLS} can contribute to {TEAM/PROJECT}. I'm available for a conversation at your convenience."
+
+  enthusiastic: "I'm excited about the possibility of joining {COMPANY} and contributing to {SPECIFIC_GOAL}. I'd welcome the opportunity to discuss how I can add value to your team."
+
+  humble_confident: "I'm confident my skills in {AREAS} align well with this role, and I'm eager to learn more about {SPECIFIC_ASPECT}. I'd appreciate the chance to discuss how I can contribute to your team's success."
