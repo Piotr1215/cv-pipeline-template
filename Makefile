@@ -1,9 +1,10 @@
-.PHONY: all clean help test software-developer devops-engineer cloud-engineer
+.PHONY: all clean help test software-developer devops-engineer cloud-engineer ats ats-all
 
 VARIANTS = software-developer devops-engineer cloud-engineer
 DATA_DIR = data
 TEMPLATE_DIR = templates
 OUTPUT_DIR = output/generated
+ATS_OUTPUT_DIR = output/ats
 PYTHON = python3
 
 all: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf) test
@@ -16,12 +17,14 @@ help:
 	@echo "  software-developer   - Build Software Developer CV"
 	@echo "  devops-engineer      - Build DevOps Engineer CV"
 	@echo "  cloud-engineer       - Build Cloud Engineer CV"
+	@echo "  ats-all              - Generate all ATS-friendly text versions"
 	@echo "  test                 - Verify all YAML data is rendered in PDFs"
 	@echo "  clean                - Remove all generated files"
 	@echo "  help                 - Show this help message"
 	@echo ""
 	@echo "Build pipeline:"
-	@echo "  YAML -> Python -> .tex -> pdflatex -> .pdf -> test"
+	@echo "  PDF:  YAML -> Python -> .tex -> pdflatex -> .pdf -> test"
+	@echo "  ATS:  YAML -> Python -> .txt (plain text, ATS-optimized)"
 
 # Generate .tex from YAML - direct conversion, no templates
 $(OUTPUT_DIR)/%.tex: $(DATA_DIR)/*.yaml scripts/generate.py
@@ -59,8 +62,26 @@ test: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf)
 	@echo "==> Running data completeness tests..."
 	@$(PYTHON) scripts/test_data_completeness.py
 
+# Generate ATS-friendly text versions
+$(ATS_OUTPUT_DIR)/%.txt: $(DATA_DIR)/*.yaml scripts/generate_ats.py
+	@echo "==> Generating ATS-friendly $*.txt..."
+	@mkdir -p $(ATS_OUTPUT_DIR)
+	$(PYTHON) scripts/generate_ats.py \
+		--variant $* \
+		--data-dir $(DATA_DIR) \
+		--output $@
+	@echo ""
+
+# Generate all ATS versions
+ats-all: $(foreach v,$(VARIANTS),$(ATS_OUTPUT_DIR)/$(v).txt)
+	@echo "✓ All ATS-friendly versions generated"
+	@echo ""
+	@echo "Generated files:"
+	@ls -lh $(ATS_OUTPUT_DIR)/*.txt
+
 # Clean all generated files
 clean:
 	@echo "==> Cleaning generated files..."
 	rm -rf $(OUTPUT_DIR)/*
+	rm -rf $(ATS_OUTPUT_DIR)/*
 	@echo "✓ Clean complete"
