@@ -1,18 +1,28 @@
-.PHONY: all clean help test software-developer devops-engineer cloud-engineer ats ats-all
+.PHONY: all clean help test test-substrate software-developer devops-engineer cloud-engineer ats-all jobs jobs-notify jobs-list jobs-tui applications applications-status open open-app setup
 
 VARIANTS = software-developer devops-engineer cloud-engineer
 DATA_DIR = data
 TEMPLATE_DIR = templates
 OUTPUT_DIR = output/generated
-ATS_OUTPUT_DIR = output/ats
-PYTHON = python3
+# Use the project virtualenv if present (run `make setup` once), else system python3.
+PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
 all: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf) test
+
+# Create the project virtualenv and install Python deps (textual TUI, requests, etc.)
+setup:
+	python3 -m venv .venv
+	.venv/bin/pip install --upgrade pip
+	.venv/bin/pip install -r requirements.txt
+	@echo "✓ venv ready (.venv). Run: make jobs-tui"
 
 help:
 	@echo "CV Pipeline Build System"
 	@echo ""
-	@echo "Available targets:"
+	@echo "Setup:"
+	@echo "  setup                - Create .venv and install Python deps (needed for jobs-tui)"
+	@echo ""
+	@echo "CV targets:"
 	@echo "  all                  - Build all CV variants and run tests"
 	@echo "  software-developer   - Build Software Developer CV"
 	@echo "  devops-engineer      - Build DevOps Engineer CV"
@@ -20,11 +30,22 @@ help:
 	@echo "  ats-all              - Generate all ATS-friendly text versions"
 	@echo "  test                 - Verify all YAML data is rendered in PDFs"
 	@echo "  clean                - Remove all generated files"
-	@echo "  help                 - Show this help message"
 	@echo ""
-	@echo "Build pipeline:"
-	@echo "  PDF:  YAML -> Python -> .tex -> pdflatex -> .pdf -> test"
-	@echo "  ATS:  YAML -> Python -> .txt (plain text, ATS-optimized)"
+	@echo "Job aggregator:"
+	@echo "  jobs                 - Fetch and score jobs (no notifications)"
+	@echo "  jobs-notify          - Fetch, score, and send ntfy notifications"
+	@echo "  jobs-list            - List top matches for the first profile in data/goals.yaml"
+	@echo "  jobs-tui             - Interactive job tracker TUI"
+	@echo ""
+	@echo "Applications (per-posting tailored CVs):"
+	@echo "  applications         - Build every applications/<slug>/cv.pdf"
+	@echo "  applications-status  - Print the application pipeline board"
+	@echo "  (per app: python3 -m scripts.application {new|build|tailor|set-status} <slug>)"
+	@echo ""
+	@echo "Open a PDF:"
+	@echo "  open                 - Open a variant PDF (fzf picker)"
+	@echo "  open VIEW=cloud-engineer  - Open a specific variant"
+	@echo "  open-app SLUG=<slug> - Open an application's tailored cv.pdf"
 
 # Generate .tex from YAML - direct conversion, no templates
 $(OUTPUT_DIR)/%.tex: $(DATA_DIR)/*.yaml scripts/generate.py
@@ -57,31 +78,58 @@ devops-engineer: $(OUTPUT_DIR)/devops-engineer.pdf
 
 cloud-engineer: $(OUTPUT_DIR)/cloud-engineer.pdf
 
-# Test data completeness
+# Test data completeness (needs PDFs) + the phase-5 substrate (hermetic, no PDFs)
 test: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf)
 	@echo "==> Running data completeness tests..."
 	@$(PYTHON) scripts/test_data_completeness.py
+	@echo "==> Running phase-5 substrate tests..."
+	@$(PYTHON) scripts/test_phase5_substrate.py
 
-# Generate ATS-friendly text versions
+# Generate ATS-friendly plain-text versions (independent of LaTeX)
+ATS_OUTPUT_DIR = output/ats
 $(ATS_OUTPUT_DIR)/%.txt: $(DATA_DIR)/*.yaml scripts/generate_ats.py
-	@echo "==> Generating ATS-friendly $*.txt..."
 	@mkdir -p $(ATS_OUTPUT_DIR)
-	$(PYTHON) scripts/generate_ats.py \
-		--variant $* \
-		--data-dir $(DATA_DIR) \
-		--output $@
-	@echo ""
+	$(PYTHON) scripts/generate_ats.py --variant $* --data-dir $(DATA_DIR) --output $@
 
-# Generate all ATS versions
 ats-all: $(foreach v,$(VARIANTS),$(ATS_OUTPUT_DIR)/$(v).txt)
-	@echo "✓ All ATS-friendly versions generated"
-	@echo ""
-	@echo "Generated files:"
-	@ls -lh $(ATS_OUTPUT_DIR)/*.txt
+	@echo "✓ All ATS-friendly versions generated in $(ATS_OUTPUT_DIR)"
+
+# Phase-5 outcome substrate tests only (timeline + composition snapshots).
+test-substrate:
+	@$(PYTHON) scripts/test_phase5_substrate.py
 
 # Clean all generated files
 clean:
 	@echo "==> Cleaning generated files..."
 	rm -rf $(OUTPUT_DIR)/*
-	rm -rf $(ATS_OUTPUT_DIR)/*
 	@echo "✓ Clean complete"
+
+# Job aggregator
+jobs:
+	$(PYTHON) -m scripts.job_aggregator.cli search
+
+jobs-notify:
+	$(PYTHON) -m scripts.job_aggregator.cli search --notify
+
+jobs-list:
+	$(PYTHON) -m scripts.job_aggregator.cli list
+
+jobs-tui:
+	$(PYTHON) -m scripts.job_aggregator.tui
+
+# Applications (per-posting tailored CVs)
+applications:
+	$(PYTHON) -m scripts.application build-all
+
+applications-status:
+	$(PYTHON) -m scripts.application status
+
+# Open a CV PDF in the default viewer.
+#   make open                      interactive picker (fzf, with page-1 preview)
+#   make open VIEW=cloud-engineer      open a specific variant directly
+#   make open-app SLUG=<slug>          open an application's tailored cv.pdf
+open:
+	@$(PYTHON) -m scripts.application open $(VIEW)
+
+open-app:
+	@$(PYTHON) -m scripts.application open $(SLUG)
