@@ -413,6 +413,9 @@ A: Use **PDF** for: networking, direct emails, LinkedIn, portfolios, in-person m
 **Q: Can I add more CV variants?**
 A: Yes! Add a spec builder in `scripts/generate.py` and update the Makefile. For one posting, tailor an existing variant with an application overlay instead.
 
+**Q: If the agent cannot invent anything, why use it at all?**
+A: Because the hard part of a CV is not the facts, it is the fit. For every posting someone has to read what the role actually values, pick the five achievements out of thirty that speak to it, order them, and phrase each one in the posting's language without parroting its checklist. That is selection and stylistics, and it is exactly what a language model is good at when the inputs are fixed. The skills make it do that job the same way every time. So the value is real: better matching, better wording, a two-page PDF in minutes per posting. The constraints are what make it safe to hand over.
+
 **Q: How does the AI part stay honest?**
 A: The agent never writes facts. It reads a brief (posting + your master facts + attribution flags) and writes an overlay that selects and rewords what is already in `data/`. Attribution flags in `wins.yaml` name the claims it must not inflate, and the applied snapshot records exactly what went out.
 
