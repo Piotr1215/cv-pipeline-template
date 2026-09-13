@@ -18,11 +18,13 @@ from typing import Dict, Any, List
 def load_yaml_data(data_dir: Path) -> Dict[str, Any]:
     """Load all YAML files."""
     data = {}
-    required_files = ['personal', 'experience', 'skills', 'strengths', 'education', 'certifications']
+    required_files = ['personal', 'experience', 'skills', 'strengths', 'education']
 
     for yaml_file in data_dir.glob('*.yaml'):
         with open(yaml_file) as f:
             data[yaml_file.stem] = yaml.safe_load(f)
+
+    data['certifications'] = data.get('certifications') or []
 
     missing = [f for f in required_files if f not in data]
     if missing:
@@ -76,6 +78,8 @@ def generate_skills(skills: Dict[str, List[str]]) -> str:
     lines.append("-" * 50)
 
     for category, items in skills.items():
+        if not items:
+            continue
         lines.append(f"\n{category}:")
         # List all skills on separate lines OR comma-separated
         # Different ATS systems prefer different formats, so we use both:
@@ -128,6 +132,8 @@ def generate_education(education: List[Dict[str, Any]]) -> str:
 
 def generate_certifications(certifications: List[Dict[str, Any]], role_tags: List[str]) -> str:
     """Generate certifications section."""
+    if not certifications:
+        return ""
     lines = []
     lines.append("CERTIFICATIONS")
     lines.append("-" * 50)
@@ -176,7 +182,7 @@ def generate_ats_cv(data: Dict[str, Any], variant: str) -> str:
     sections.append(generate_experience(data['experience'], config['role_tags']))
     sections.append(generate_education(data['education']))
 
-    if data['certifications']:
+    if data.get('certifications'):
         sections.append(generate_certifications(data['certifications'], config['role_tags']))
 
     # Add footer note

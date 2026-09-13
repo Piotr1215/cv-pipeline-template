@@ -252,16 +252,21 @@ possible without trusting mutable files:
   coarse board cannot express (recruiter contact, screening scheduled, ghosted)
   are logged explicitly with `event <slug> <type>` or `log_event(...)`. Read with
   `events <slug>`.
-- `application_snapshots` is the immutable record of what was ACTUALLY sent. On the
-  applied transition (TUI `s` -> Applied, or `set-status applied`) the resolved
-  composition is frozen: highlight lines in order, selected strength indices and
-  titles, the first-N experience entries, expertise tags, the full resolved
-  `spec_json`, the role/base, the cv path, a PDF content hash, the overlay hash,
-  and a verbatim copy of the overlay yaml, plus date_generated and date_applied.
-  Composition is NOT reliably recoverable from the overlay, spec, and master YAML
-  because those drift, so we snapshot at send time. Backfill or capture manually
-  with `snapshot <slug>` (idempotent: an unchanged overlay+pdf reuses the existing
-  snapshot of that class).
+- Each successful two-page application build saves `build-manifest.json`: the
+  resolved composition, master data, input hashes, overlay text, and PDF hash.
+  `application_snapshots` records that build on the applied transition. It uses
+  the saved composition even if the overlay or master YAML has since changed.
+  A sent capture requires a matching PDF and manifest. Rebuild older applications
+  without a manifest before recording them as sent; this cannot reconstruct a
+  PDF that was sent before manifests existed.
+- Sent captures archive the exact PDF and manifest under `sent/<content-hash>/`.
+  Later builds do not replace those files. These local artifacts and `jobs.db`
+  are gitignored, so include them in your own backup. A matching hash verifies
+  the build, not whether the user actually sent it. Mark applied only after
+  submitting that PDF.
+- `snapshot <slug>` records a draft. Without a build manifest it captures current
+  source composition and does not claim an existing PDF matches it. Dedupe uses
+  the overlay, PDF, resolved spec, and sent class.
 - Sent vs draft: each snapshot carries a `sent` flag. The applied transition sets
   `sent=1` and fills `date_applied`; a manual `snapshot <slug>` is `sent=0` (a
   draft/backfill capture) unless you pass `--sent`. Dedupe is per sent-class, so a
@@ -281,4 +286,7 @@ rather than inventing a trend from a few results.
 
 `application.yaml` (truth), `job-posting.md`, `research.md`, `cv.tex` + `cv.pdf`
 (generated, never hand-edit, both gitignored), optional `cover-letter.md`,
-`README.md`. The build cleans LaTeX aux files automatically.
+`README.md`, generated `build-manifest.json`, and local `sent/` archives. LaTeX
+runs in a temporary directory; builds leave application notes and attachments
+untouched. Unknown override keys, invalid types, and out-of-range indices are
+errors. Shape validation does not verify the truth of rewritten prose.

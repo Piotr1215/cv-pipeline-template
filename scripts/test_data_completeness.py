@@ -4,7 +4,6 @@ Test script to verify all YAML data is rendered in generated PDFs.
 Checks that all jobs, skills, certifications, education entries appear in the output.
 """
 
-import yaml
 import subprocess
 import sys
 import argparse
@@ -13,15 +12,7 @@ from typing import Dict, List, Any
 
 # Make `scripts.generate` importable when run directly (python3 scripts/test_data_completeness.py).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from scripts.generate import SPEC_BUILDERS, build_spec  # noqa: E402
-
-def load_yaml_data(data_dir: Path) -> Dict[str, Any]:
-    """Load all YAML data files."""
-    data = {}
-    for yaml_file in data_dir.glob('*.yaml'):
-        with open(yaml_file) as f:
-            data[yaml_file.stem] = yaml.safe_load(f)
-    return data
+from scripts.generate import SPEC_BUILDERS, build_spec, load_yaml_data  # noqa: E402
 
 def get_pdf_text(pdf_path: Path) -> str:
     """Extract text from PDF using pdftotext."""
@@ -36,6 +27,21 @@ def get_pdf_text(pdf_path: Path) -> str:
     except subprocess.CalledProcessError as e:
         print(f"Error extracting text from {pdf_path}: {e}")
         return ""
+
+def check_page_count(pdf_path: Path) -> List[str]:
+    """Require the shared two-page layout and fail if it cannot be inspected."""
+    try:
+        result = subprocess.run(
+            ['pdfinfo', str(pdf_path)], capture_output=True, text=True, check=True,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith('Pages:'):
+                pages = int(line.split(':', 1)[1].strip())
+                return [] if pages == 2 else [f"PDF has {pages} pages; expected 2"]
+        return ["Could not determine PDF page count"]
+    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        return [f"Could not determine PDF page count: {exc}"]
+
 
 def normalize_text(text: str) -> str:
     """Normalize text for comparison (lowercase, collapse whitespace, unfold ligatures and quotes).
@@ -128,9 +134,10 @@ def check_certifications(data: Dict, pdf_text: str, variant: str) -> List[str]:
     pdf_normalized = normalize_text(pdf_text)
 
     # Each variant's spec decides how many certifications render (None = all).
-    cert_limit = build_spec(variant, data).get('cert_limit') or len(data['certifications'])
+    cert_limit = build_spec(variant, data).get('cert_limit')
+    certifications = data.get('certifications') or []
 
-    for cert in data['certifications'][:cert_limit]:
+    for cert in certifications[:cert_limit]:
         cert_name = normalize_text(cert['name'])
         if cert_name not in pdf_normalized:
             issues.append(f"Missing certification: {cert['name']}")
@@ -214,7 +221,9 @@ def test_variant(variant: str, data_dir: Path, output_dir: Path) -> bool:
         return False
 
     # Run all checks
-    all_issues = []
+    all_issues = check_page_count(pdf_path)
+    for issue in all_issues:
+        print(f"  ❌ {issue}")
 
     print("\n📋 Checking personal information...")
     issues = check_personal_info(data, pdf_text, variant)

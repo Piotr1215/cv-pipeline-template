@@ -10,6 +10,10 @@ Run: python3 scripts/test_phase5_substrate.py
 import sys
 import json
 import tempfile
+import shutil
+from contextlib import contextmanager
+from types import SimpleNamespace
+from unittest.mock import patch
 from pathlib import Path
 
 # Make 'scripts' importable when run directly.
@@ -91,56 +95,150 @@ def test_snapshot_roundtrip_is_frozen():
     assert snap["overlay_hash"] == "deadbeef"
 
 
-def test_snapshot_application_freezes_real_composition():
-    """snapshot_application captures a real application's resolved composition,
-    recoverable as JSON without reading any mutable yaml, and dedupes when the
-    composition is unchanged."""
-    _fresh_db()
+@contextmanager
+def _built_application():
+    """Exercise real build-manifest creation with only the TeX process stubbed."""
     from scripts import application
-    slugs = application.list_application_slugs()
-    if not slugs:
-        print("  (skip: no application folders present)")
-        return
-    slug = slugs[0]
-    sid = application.snapshot_application(slug, source="test")
-    assert sid, "expected a snapshot id"
-    board = storage.get_application_by_cv_folder(slug)
-    snap = storage.get_latest_snapshot(board["id"])
-    assert snap["role_type"], snap
-    assert isinstance(json.loads(snap["highlight_ids"]), list)
-    spec = json.loads(snap["spec_json"])
-    assert spec.get("highlights") is not None
-    assert snap["overlay_hash"], "overlay hash should be recorded"
-    sid2 = application.snapshot_application(slug, source="test")
-    assert sid2 == sid, ("unchanged composition should dedupe", sid, sid2)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        apps = root / "applications"
+        folder = apps / "example"
+        folder.mkdir(parents=True)
+        (folder / "application.yaml").write_text(
+            "base: devops-engineer\nmeta:\n  company: ACME\n  role: Engineer\n  status: draft\noverrides: {}\n")
+        shutil.copytree(application.DATA_DIR, root / "data")
+
+        def compile_pdf(d):
+            (d / "cv.pdf").write_bytes(b"test PDF from build")
+            return 0
+
+        with patch.object(storage, "DB_PATH", root / "jobs.db"), \
+             patch.object(application, "APPLICATIONS_DIR", apps), \
+             patch.object(application, "DATA_DIR", root / "data"), \
+             patch.object(application, "_compile_pdf", side_effect=compile_pdf), \
+             patch.object(application, "_pdf_pages", return_value="2"):
+            assert application.cmd_build(SimpleNamespace(slug="example", no_pdf=False)) == 0
+            yield application, folder
+
+
+def test_snapshot_application_freezes_real_composition():
+    with _built_application() as (application, folder):
+        sid = application.snapshot_application("example", source="test")
+        board = storage.get_application_by_cv_folder("example")
+        snap = storage.get_latest_snapshot(board["id"])
+        assert snap["role_type"] and snap["overlay_hash"]
+        assert isinstance(json.loads(snap["highlight_ids"]), list)
+        assert json.loads(snap["spec_json"])["highlights"]
+        assert application.snapshot_application("example", source="test") == sid
 
 
 def test_sent_vs_draft_snapshots_are_distinguishable():
-    """A draft/backfill snapshot and a genuine sent snapshot of the same
-    composition are distinct rows; only the sent one is sent=1 with a
-    date_applied, and only sent (or date_applied) rows qualify for analysis."""
-    _fresh_db()
-    from scripts import application
-    slugs = application.list_application_slugs()
-    if not slugs:
-        print("  (skip: no application folders present)")
-        return
-    slug = slugs[0]
-    draft_id = application.snapshot_application(slug, source="test", sent=False)
-    sent_id = application.snapshot_application(slug, source="test", sent=True)
-    assert draft_id and sent_id and draft_id != sent_id, (draft_id, sent_id)
-    board = storage.get_application_by_cv_folder(slug)
-    snaps = {s["id"]: s for s in storage.get_snapshots(board["id"])}
-    assert snaps[draft_id]["sent"] == 0
-    assert snaps[sent_id]["sent"] == 1
-    assert snaps[sent_id]["date_applied"], "sent snapshot must carry a date_applied"
-    assert not snaps[draft_id]["date_applied"], "draft should not auto-set applied"
-    # Dedupe is per sent-class.
-    assert application.snapshot_application(slug, source="test", sent=False) == draft_id
-    assert application.snapshot_application(slug, source="test", sent=True) == sent_id
-    # The analysis filter (sent=1 OR date_applied present) excludes the draft.
-    analyzable = [s for s in snaps.values() if s["sent"] or s["date_applied"]]
-    assert analyzable and all(s["sent"] for s in analyzable), analyzable
+    with _built_application() as (application, folder):
+        draft_id = application.snapshot_application("example", source="test", sent=False)
+        sent_id = application.snapshot_application("example", source="test", sent=True)
+        assert draft_id != sent_id
+        board = storage.get_application_by_cv_folder("example")
+        snaps = {s["id"]: s for s in storage.get_snapshots(board["id"])}
+        assert snaps[draft_id]["sent"] == 0 and not snaps[draft_id]["date_applied"]
+        assert snaps[sent_id]["sent"] == 1 and snaps[sent_id]["date_applied"]
+        assert application.snapshot_application("example", sent=False) == draft_id
+        assert application.snapshot_application("example", sent=True) == sent_id
+        assert Path(snaps[sent_id]["cv_path"]).read_bytes() == (folder / "cv.pdf").read_bytes()
+
+
+def test_sent_snapshot_uses_build_despite_yaml_drift():
+    with _built_application() as (application, folder):
+        manifest = application.load_built_manifest("example")
+        original_pdf = (folder / "cv.pdf").read_bytes()
+        # Both master facts and the overlay may change after a build.
+        personal = application.DATA_DIR / "personal.yaml"
+        personal.write_text(personal.read_text().replace("John", "Changed"))
+        overlay = folder / "application.yaml"
+        overlay.write_text(overlay.read_text() + "\n# edited after build\n")
+        sid = application.snapshot_application("example", sent=True)
+        board = storage.get_application_by_cv_folder("example")
+        snap = storage.get_latest_snapshot(board["id"])
+        assert snap["id"] == sid
+        assert snap["overlay_yaml"] == manifest["overlay_yaml"]
+        assert json.loads(snap["spec_json"]) == manifest["composition"]["spec"]
+        archived = Path(snap["cv_path"])
+        assert archived.read_bytes() == original_pdf
+        stored_manifest = json.loads((archived.parent / "build-manifest.json").read_text())
+        assert stored_manifest == manifest
+        # A later build replaces current artifacts without touching the archive.
+        assert application.cmd_build(SimpleNamespace(slug="example", no_pdf=False)) == 0
+        assert archived.read_bytes() == original_pdf
+        assert json.loads((archived.parent / "build-manifest.json").read_text()) == manifest
+
+
+def test_sent_snapshot_rejects_missing_or_changed_build_before_board_write():
+    for missing in ("cv.pdf", "build-manifest.json"):
+        with _built_application() as (application, folder):
+            (folder / missing).unlink()
+            try:
+                application.snapshot_application("example", sent=True)
+            except ValueError as exc:
+                assert "Rebuild" in str(exc)
+            else:
+                raise AssertionError("Missing artifact accepted")
+            assert not storage.DB_PATH.exists(), "validation must precede board writes"
+    with _built_application() as (application, folder):
+        (folder / "cv.pdf").write_bytes(b"a different PDF")
+        try:
+            application.cmd_set_status(SimpleNamespace(slug="example", status="applied"))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Changed PDF accepted")
+        assert application.load_application("example")["meta"]["status"] == "draft"
+        assert not storage.DB_PATH.exists()
+
+
+def test_draft_capture_never_inherits_applied_date():
+    with _built_application() as (application, folder):
+        with patch.object(application, "load_application", return_value={
+            "base": "devops-engineer", "meta": {"applied_on": "2026-01-01"}
+        }):
+            application.snapshot_application("example", sent=False)
+        board = storage.get_application_by_cv_folder("example")
+        assert not storage.get_latest_snapshot(board["id"])["date_applied"]
+
+
+def test_cli_status_changes_only_meta_status_and_keeps_comments():
+    with _built_application() as (application, folder):
+        path = folder / "application.yaml"
+        path.write_text('base: devops-engineer\nmeta:\n  notes: |\n    status: do not change\n  status: "draft" # keep comment\n')
+        assert application.cmd_set_status(SimpleNamespace(slug="example", status="applied")) == 0
+        text = path.read_text()
+        assert "status: do not change" in text
+        assert "status: applied # keep comment" in text
+        board = storage.get_application_by_cv_folder("example")
+        assert board["status"] == "2-Applied"
+        assert storage.get_latest_snapshot(board["id"])["sent"] == 1
+
+
+def test_overfull_application_does_not_create_build_manifest():
+    with _built_application() as (application, folder):
+        manifest_path = folder / "build-manifest.json"
+        manifest_path.unlink()
+        with patch.object(application, "_pdf_pages", return_value="3"):
+            assert application.cmd_build(SimpleNamespace(slug="example", no_pdf=False)) == 1
+        assert not manifest_path.exists()
+
+
+def test_overfull_application_preserves_previous_build():
+    with _built_application() as (application, folder):
+        previous = {name: (folder / name).read_bytes() for name in ("cv.tex", "cv.pdf", "build-manifest.json")}
+
+        def overfull(d):
+            (d / "cv.pdf").write_bytes(b"overfull PDF")
+            return 0
+
+        with patch.object(application, "_compile_pdf", side_effect=overfull), \
+             patch.object(application, "_pdf_pages", return_value="3"):
+            assert application.cmd_build(SimpleNamespace(slug="example", no_pdf=False)) == 1
+        for name, content in previous.items():
+            assert (folder / name).read_bytes() == content
 
 
 def main() -> int:

@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import yaml
 from datetime import datetime
 from textual import work
 from textual.app import App, ComposeResult
@@ -67,14 +68,15 @@ class StatusModal(ModalScreen):
     def on_select_changed(self, event: Select.Changed) -> None:
         if not self._initialized:
             return
-        update_application(self.app_id, status=event.value, _event_source="tui")
         # On 'applied', freeze the composition snapshot (phase 5) for a linked CV.
         if event.value == "2-Applied" and self.cv_folder:
             try:
                 from scripts.application import snapshot_application
                 snapshot_application(self.cv_folder, source="tui", sent=True)
-            except Exception:
-                pass
+            except (ValueError, OSError, yaml.YAMLError) as exc:
+                self.notify(str(exc), severity="error", timeout=10)
+                return
+        update_application(self.app_id, status=event.value, _event_source="tui")
         self.dismiss(True)
 
 

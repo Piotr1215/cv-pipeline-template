@@ -84,6 +84,7 @@ test: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf)
 	@$(PYTHON) scripts/test_data_completeness.py
 	@echo "==> Running phase-5 substrate tests..."
 	@$(PYTHON) scripts/test_phase5_substrate.py
+	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections
 
 # Generate ATS-friendly plain-text versions (independent of LaTeX)
 ATS_OUTPUT_DIR = output/ats
@@ -97,6 +98,7 @@ ats-all: $(foreach v,$(VARIANTS),$(ATS_OUTPUT_DIR)/$(v).txt)
 # Phase-5 outcome substrate tests only (timeline + composition snapshots).
 test-substrate:
 	@$(PYTHON) scripts/test_phase5_substrate.py
+	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections
 
 # Clean all generated files
 clean:

@@ -4,7 +4,7 @@
 
 Automated CV generation pipeline that creates multiple psychologically-optimized CV variants from YAML data.
 
-**🆕 Now a positioning system with non-intrusive AI: per-posting tailoring overlays, an honest evidence store, a job funnel with a kanban TUI, and skills that make Claude Code or Codex follow a precise workflow: select and reword facts from your YAML files, never invent them.**
+**🆕 Now a positioning system with non-intrusive AI: per-posting tailoring overlays, an honest evidence store, a job funnel with a kanban TUI, and skills that guide Claude Code or Codex through a precise workflow: select and reword facts from your YAML files, never invent them.**
 
 ## Video Tutorial
 
@@ -37,7 +37,7 @@ graph LR
 - Version controlled career narrative
 - Update once → all CVs updated automatically
 
-**Non-intrusive AI.** The agent never gets a blank page. At tailoring time it receives a bounded menu (the posting, every fact in your YAML, and the attribution flags that say what must not be inflated) and its only job is to select, reorder, and reword from that menu. It cannot add a metric, a title, or a date that is not already in `data/`, and two project skills hold it to that workflow step by step. Hallucination is closed off by the shape of the task, not by asking nicely. Because the agent reads and writes files you version, you can also ignore it entirely and edit the overlay by hand.
+**Non-intrusive AI.** The agent never gets a blank page. At tailoring time it receives a bounded menu (the posting, every fact in your YAML, and the attribution flags that say what must not be inflated) and its only job is to select, reorder, and reword from that menu. Two project skills instruct it to use only supported metrics, titles, and dates. This bounded task reduces the risk of invented claims, but the code does not verify the truth of rewritten prose. Review the overlay and final PDF against your evidence before sending. Because the agent reads and writes files you version, you can also ignore it entirely and edit the overlay by hand.
 
 ## The Positioning System
 
@@ -59,7 +59,7 @@ Three layers, no duplication:
 
 - `data/*.yaml` holds the facts. The only place they live.
 - Variants in `scripts/generate.py` are role types (software developer, DevOps engineer, cloud engineer): a palette, a default profile, default selections. All share one fixed two-page layout.
-- `applications/<slug>/application.yaml` is one file per real posting: the tracking record (`meta:`) and a thin overlay (`base:` + `overrides:`) that selects, reorders, and rewords facts for that posting. It never adds facts.
+- `applications/<slug>/application.yaml` is one file per real posting: the tracking record (`meta:`) and a thin overlay (`base:` + `overrides:`) that selects, reorders, and rewords facts for that posting. Keep every claim grounded in the master facts.
 
 ### Per-application workflow
 
@@ -86,7 +86,7 @@ The overlay schema (tagline, profile paragraphs, highlights, strength indices, e
 
 ### The evidence store and attribution flags
 
-`data/wins.yaml` is where achievements live with their evidence: `cv_highlights` are the short CV-ready lines the generators and the tailoring brief read; `wins` carries the source, date, and who did what behind each line. `meta.attribution_flags` records anything an overlay must never flatten: a metric a colleague measured on a system you built, work that was co-led. The agent reads these flags in every tailoring brief. This is the honesty layer that makes AI tailoring safe to use.
+`data/wins.yaml` is where achievements live with their evidence: `cv_highlights` are the short CV-ready lines the generators and the tailoring brief read; `wins` carries the source, date, and who did what behind each line. `meta.attribution_flags` records anything an overlay must never flatten: a metric a colleague measured on a system you built, work that was co-led. The agent reads these flags in every tailoring brief. Use these flags to check that rewritten bullets preserve the original credit.
 
 ### Skills for Claude Code and Codex
 
@@ -95,11 +95,11 @@ Two project skills auto-load in this repo (`.claude/skills/` for Claude Code, mi
 - `cv-applications`: the system's purpose, the agent's role per phase (discovery, selection, positioning, data evolution, outcome adaptation), the commands, the overlay schema, the TUI bridge, and the honesty guardrails.
 - `cv-writing`: the craft. Impact-led bullets, no posting-checklist echo, three-paragraph profiles, cover letters, and the sizing rules that keep a CV on two pages.
 
-Ask your agent to "tailor a CV for this posting" and it will run the brief, write honest overrides, build, and tell you what it could not support from your facts.
+Ask your agent to "tailor a CV for this posting" to run the brief, draft overrides, build, and identify claims it could not support from your facts. Review the result before sending.
 
 ### Outcome history
 
-Every board status change appends to an `application_events` timeline, and the applied transition freezes an immutable `application_snapshots` row: the resolved highlights, strengths, experience, expertise, PDF hash, and a verbatim copy of the overlay. Overlays and master data drift, so this is the only reliable record of what was sent. The aggregate analysis on top is intentionally not built yet; the skill explains the discipline for when it is (patterns across many applications, never an explanation for one).
+Every board status change appends to an `application_events` timeline. Each successful two-page application build saves a manifest with the resolved composition, input hashes, and PDF hash. The applied transition records that build in `application_snapshots` and archives its exact PDF and manifest. Later changes to the overlay or master data do not rewrite the recorded build composition. A sent snapshot requires a matching PDF and manifest; rebuild if either is missing or they no longer match. Mark an application as applied only after sending that PDF. Manifests, sent archives, and `jobs.db` stay local and gitignored; include them in your backups. The aggregate analysis on top is intentionally not built yet; the skill explains the discipline for when it is (patterns across many applications, never an explanation for one).
 
 ### Job funnel and kanban TUI
 
@@ -119,6 +119,9 @@ Click the green "Use this template" button above to create your own repository.
 ### 2. Edit Your Data
 
 Update the YAML files in `data/` with your information:
+
+Certifications are optional: omit `certifications.yaml` or leave its list empty.
+An empty or omitted `Languages` list also hides that section.
 
 ```bash
 # Edit your personal info
@@ -146,7 +149,7 @@ GitHub Actions will automatically:
 - Run tests to verify all data is included
 - Create a release with PDF downloads
 
-Download from: `https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest`
+Download PDFs and plain-text CVs from: `https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest`
 
 ## What You Get
 
@@ -413,11 +416,11 @@ A: Use **PDF** for: networking, direct emails, LinkedIn, portfolios, in-person m
 **Q: Can I add more CV variants?**
 A: Yes! Add a spec builder in `scripts/generate.py` and update the Makefile. For one posting, tailor an existing variant with an application overlay instead.
 
-**Q: If the agent cannot invent anything, why use it at all?**
-A: Because the hard part of a CV is not the facts, it is the fit. For every posting someone has to read what the role actually values, pick the five achievements out of thirty that speak to it, order them, and phrase each one in the posting's language without parroting its checklist. That is selection and stylistics, and it is exactly what a language model is good at when the inputs are fixed. The skills make it do that job the same way every time. So the value is real: better matching, better wording, a two-page PDF in minutes per posting. The constraints are what make it safe to hand over.
+**Q: Why use an agent if the facts are already written?**
+A: Because the hard part of a CV is not the facts, it is the fit. For every posting someone has to read what the role actually values, pick the five achievements out of thirty that speak to it, order them, and phrase each one in the posting's language without parroting its checklist. That is selection and stylistics, and it is exactly what a language model is good at when the inputs are fixed. The skills guide that process. The aim is better matching and wording with less manual work, while you remain responsible for checking the claims and final PDF.
 
 **Q: How does the AI part stay honest?**
-A: The agent never writes facts. It reads a brief (posting + your master facts + attribution flags) and writes an overlay that selects and rewords what is already in `data/`. Attribution flags in `wins.yaml` name the claims it must not inflate, and the applied snapshot records exactly what went out.
+A: The agent reads a brief (posting + your master facts + attribution flags) and is instructed to select and reword only supported facts. Attribution flags in `wins.yaml` identify claims it must not inflate. Review metrics, dates, titles, and shared credit against that evidence before sending. The applied snapshot preserves the selected build for later review.
 
 **Q: Do I need to configure secrets or tokens?**
 A: No! The template works out-of-the-box with no configuration needed.

@@ -7,6 +7,19 @@ on:
       - 'data/**'                  # YAML data files
       - 'templates/**'             # LaTeX class files
       - 'scripts/**'               # Generator, application system, tests
+      - 'Makefile'
+      - 'requirements.txt'
+      - '.claude/skills/**'
+      - '.github/workflows/cv-build.yml'
+  pull_request:
+    paths:
+      - 'data/**'
+      - 'templates/**'
+      - 'scripts/**'
+      - 'applications/**'
+      - 'Makefile'
+      - 'requirements.txt'
+      - '.claude/skills/**'
       - '.github/workflows/cv-build.yml'
   workflow_dispatch:               # Manual trigger
 
@@ -31,7 +44,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y python3 python3-pip poppler-utils
-          pip3 install PyYAML --break-system-packages
+          pip3 install --ignore-installed -r requirements.txt --break-system-packages
 
       # Generate .tex from YAML
       - name: Generate LaTeX from YAML
@@ -63,13 +76,27 @@ jobs:
       - name: Test application substrate
         run: |
           python3 scripts/test_phase5_substrate.py
+          python3 -m unittest scripts.test_application_integrity scripts.test_optional_sections scripts.test_application_status
 
-      # Upload PDF artifact
-      - name: Upload PDF
+      - name: Build example application
+        if: matrix.variant == 'devops-engineer'
+        run: |
+          if [ -f applications/example-acme-devops-engineer/application.yaml ]; then
+            python3 -m scripts.application build example-acme-devops-engineer
+          fi
+
+      - name: Generate plain-text CV
+        run: |
+          python3 scripts/generate_ats.py --variant ${{ matrix.variant }} --data-dir data/ --output output/ats/${{ matrix.variant }}.txt
+
+      # Upload both formats from the same variant build.
+      - name: Upload CV files
         uses: actions/upload-artifact@v4
         with:
           name: cv-${{ matrix.variant }}
-          path: output/generated/${{ matrix.variant }}.pdf
+          path: |
+            output/generated/${{ matrix.variant }}.pdf
+            output/ats/${{ matrix.variant }}.txt
           retention-days: 90
 
   # NEW: Create GitHub Release with all CV PDFs
@@ -87,20 +114,19 @@ jobs:
           path: cv-artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: cv-${{ github.run_number }}
           name: CV Build ${{ github.run_number }}
           body: |
             Automated CV build from commit ${{ github.sha }}
 
-            Generated PDFs:
+            Generated PDF and plain-text CVs:
             - Software Developer CV
             - DevOps Engineer CV
             - Cloud Engineer CV
           files: |
-            cv-artifacts/cv-software-developer/*.pdf
-            cv-artifacts/cv-devops-engineer/*.pdf
-            cv-artifacts/cv-cloud-engineer/*.pdf
+            cv-artifacts/**/*.pdf
+            cv-artifacts/**/*.txt
           draft: false
           prerelease: false
