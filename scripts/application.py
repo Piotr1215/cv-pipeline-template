@@ -33,6 +33,7 @@ import hashlib
 import sqlite3
 import argparse
 import subprocess
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -81,6 +82,8 @@ def slugify(text: str) -> str:
 
 
 def app_dir(slug: str) -> Path:
+    if not isinstance(slug, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+        raise ValueError("Application slug must contain lowercase letters, digits, and single hyphens")
     return APPLICATIONS_DIR / slug
 
 
@@ -94,11 +97,22 @@ def load_application(slug: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"No application.yaml for '{slug}' (looked in {path})")
     with open(path) as f:
         app = yaml.safe_load(f) or {}
+    if not isinstance(app, dict):
+        raise ValueError(f"{path}: application must be a mapping")
     if "base" not in app:
         raise ValueError(f"{path}: missing required 'base:' (the variant to start from)")
-    if app["base"] not in SPEC_BUILDERS:
+    if not isinstance(app["base"], str) or app["base"] not in SPEC_BUILDERS:
         raise ValueError(f"{path}: unknown base variant '{app['base']}'. "
                          f"Choose from: {', '.join(SPEC_BUILDERS)}")
+    meta = app.get("meta")
+    meta = {} if meta is None else meta
+    if not isinstance(meta, dict):
+        raise ValueError(f"{path}: meta must be a mapping")
+    for key in ("company", "role", "location", "url", "source", "salary", "notes", "next_action"):
+        if meta.get(key) is not None and not isinstance(meta[key], str):
+            raise ValueError(f"{path}: meta.{key} must be text")
+    if meta.get("status", "draft") not in STATUSES:
+        raise ValueError(f"{path}: invalid meta.status")
     return app
 
 
@@ -137,10 +151,66 @@ _PASSTHROUGH = (
 )
 
 
+def _validate_overrides(ov: Dict[str, Any], data: Dict[str, Any], spec: Dict[str, Any]) -> None:
+    """Validate shape and selections, not the truth of free-text claims."""
+    if not isinstance(ov, dict):
+        raise ValueError("overrides must be a mapping")
+    extra = {"tagline", "highlights_order", "highlights_extra", "sidebar_extras",
+             "tech_groups", "style", "fonts"}
+    unknown = set(ov) - set(_PASSTHROUGH) - extra
+    if unknown:
+        raise ValueError(f"Unknown override keys: {', '.join(sorted(map(str, unknown)))}")
+    lists = {"profile_paras", "highlights", "highlights_extra", "expertise_tags"}
+    counts = {"experience_count", "achievements_per_job", "cert_limit"}
+    booleans = {"include_languages", "include_phone", "include_youtube"}
+    indices = {"strength_indices": len(data.get("strengths", [])),
+               "highlights_order": len(spec.get("highlights", []))}
+    for key, value in ov.items():
+        if key in lists:
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise ValueError(f"overrides.{key} must be a list of text")
+        elif key in counts:
+            if key == "cert_limit" and value is None:
+                continue
+            if type(value) is not int or value < 0:
+                raise ValueError(f"overrides.{key} must be a nonnegative integer")
+        elif key in booleans:
+            if type(value) is not bool:
+                raise ValueError(f"overrides.{key} must be true or false")
+        elif key in indices:
+            if not isinstance(value, list) or any(
+                type(v) is not int or not 0 <= v < indices[key] for v in value
+            ):
+                raise ValueError(f"overrides.{key} contains invalid indices (size {indices[key]})")
+        elif key == "columnratio":
+            try:
+                valid = type(value) in (str, int, float) and 0 < float(value) < 1
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError("overrides.columnratio must be a number between 0 and 1")
+        elif key in ("sidebar_extras", "tech_groups"):
+            keys = {"title", "text"} if key == "sidebar_extras" else {"label", "tags"}
+            if not isinstance(value, list):
+                raise ValueError(f"overrides.{key} must be a list")
+            for item in value:
+                if not isinstance(item, dict) or set(item) != keys:
+                    raise ValueError(f"overrides.{key} entries require {sorted(keys)}")
+                for field, content in item.items():
+                    valid = (isinstance(content, list) and all(isinstance(v, str) for v in content)
+                             if field == "tags" else isinstance(content, str))
+                    if not valid:
+                        raise ValueError(f"overrides.{key}.{field} has an invalid type")
+        elif not isinstance(value, str):
+            raise ValueError(f"overrides.{key} must be text")
+
+
 def merged_spec(data: Dict[str, Any], app: Dict[str, Any]) -> Dict[str, Any]:
     """Start from the base variant spec and apply the application's overrides."""
     spec = build_spec(app["base"], data)
-    ov = app.get("overrides") or {}
+    ov = app.get("overrides")
+    ov = {} if ov is None else ov
+    _validate_overrides(ov, data, spec)
 
     # tagline -> per-application override used by the header
     if "tagline" in ov:
@@ -149,7 +219,7 @@ def merged_spec(data: Dict[str, Any], app: Dict[str, Any]) -> Dict[str, Any]:
     # highlights: replace wholesale, or reorder/select the base set, or append
     if "highlights_order" in ov:
         base_h = spec.get("highlights", [])
-        spec["highlights"] = [base_h[i] for i in ov["highlights_order"] if 0 <= i < len(base_h)]
+        spec["highlights"] = [base_h[i] for i in ov["highlights_order"]]
     if "highlights_extra" in ov:
         spec["highlights"] = list(spec.get("highlights", [])) + list(ov["highlights_extra"])
 
@@ -177,44 +247,6 @@ def merged_spec(data: Dict[str, Any], app: Dict[str, Any]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------
 # Commands
 # --------------------------------------------------------------------------
-
-_APPLICATION_TEMPLATE = """\
-# Application: {company} - {role}
-#
-# This file is BOTH the tracking record (meta:) and the CV tailoring overlay
-# (base: + overrides:). Facts live in ../../data/*.yaml; only select / reorder /
-# reword them here. Build with:  python3 -m scripts.application build {slug}
-
-meta:
-  company: {company}
-  role: {role}
-  location: {location}
-  url: {url}
-  source: {source}
-  salary: {salary}
-  status: draft            # {statuses}
-  applied_on:              # YYYY-MM-DD once you apply
-  deadline:
-  next_action:
-  notes: |
-
-
-# Which variant template to start from.
-base: {base}
-
-# Everything here overrides the base variant. Omit a key to inherit it.
-# Common knobs (see .claude/skills/cv-applications for the full schema):
-#   tagline: "..."                       custom one-liner under the name
-#   highlights_order: [3, 0, 2, 4]       reorder/select the base highlight bullets
-#   highlights: ["...", "..."]           replace the highlight bullets outright
-#   expertise_tags: ["...", "..."]       page-2 expertise tags
-#   strength_indices: [5, 1, 2]          which strengths (index into strengths.yaml)
-#   sidebar_extras:                      extra page-1 sidebar prose (e.g. "Why <Company>")
-#     - title: "Why {company}"
-#       text: "..."
-overrides: {{}}
-"""
-
 
 def cmd_new(args) -> int:
     company = args.company or ""
@@ -249,11 +281,19 @@ def cmd_new(args) -> int:
         return 1
     d.mkdir(parents=True, exist_ok=True)
 
-    content = _APPLICATION_TEMPLATE.format(
-        company=company or "TODO", role=role or "TODO", location=location,
-        url=url or "TODO", source=source, salary=salary or "null",
-        base=args.variant, slug=slug, statuses="|".join(STATUSES),
-    )
+    app = {
+        "meta": {
+            "company": company or "TODO", "role": role or "TODO",
+            "location": location, "url": url or "TODO", "source": source,
+            "salary": salary or None, "status": "draft", "applied_on": None,
+            "deadline": None, "next_action": None, "notes": "",
+        },
+        "base": args.variant,
+        "overrides": {},
+    }
+    content = "# Facts stay in data/*.yaml; overrides select and reword them.\n"
+    content += "# See .claude/skills/cv-applications/SKILL.md for the overlay schema.\n"
+    content += yaml.safe_dump(app, sort_keys=False, allow_unicode=True)
     app_yaml_path(slug).write_text(content)
 
     # Drop placeholders for the posting + notes so tailoring has somewhere to land.
@@ -267,25 +307,21 @@ def cmd_new(args) -> int:
 
 
 def _compile_pdf(d: Path, tex_name: str = "cv.tex") -> int:
-    """Compile <d>/cv.tex to cv.pdf with pdflatex, then clean build artifacts."""
-    for cls in list(TEMPLATE_DIR.glob("*.cls")) + list(TEMPLATE_DIR.glob("*.cfg")):
-        shutil.copy(cls, d / cls.name)
-
-    proc = subprocess.run(
-        ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", tex_name],
-        cwd=d, capture_output=True, text=True,
-    )
-    if proc.returncode != 0:
-        tail = "\n".join(proc.stdout.splitlines()[-25:])
-        print(f"pdflatex failed in {d}:\n{tail}", file=sys.stderr)
-        return 1
-
-    # Clean everything except the committed source + the PDF.
-    keep = {tex_name, "cv.pdf", "application.yaml", "job-posting.md",
-            "research.md", "README.md", "cover-letter.md"}
-    for f in d.iterdir():
-        if f.is_file() and f.name not in keep:
-            f.unlink()
+    """Compile in isolation; never clean user-owned application files."""
+    with tempfile.TemporaryDirectory(prefix="cv-build-") as tmp:
+        build_dir = Path(tmp)
+        shutil.copyfile(d / tex_name, build_dir / tex_name)
+        for cls in list(TEMPLATE_DIR.glob("*.cls")) + list(TEMPLATE_DIR.glob("*.cfg")):
+            shutil.copy(cls, build_dir / cls.name)
+        proc = subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", tex_name],
+            cwd=build_dir, capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            tail = "\n".join(proc.stdout.splitlines()[-25:])
+            print(f"pdflatex failed in {d}:\n{tail}", file=sys.stderr)
+            return 1
+        shutil.copyfile(build_dir / Path(tex_name).with_suffix(".pdf"), d / "cv.pdf")
     return 0
 
 
@@ -295,19 +331,45 @@ def cmd_build(args) -> int:
     data = load_yaml_data(DATA_DIR)
     spec = merged_spec(data, app)
     latex = render_cv(data, spec)
+    # Capture the exact inputs before compiling, rather than rereading after it.
+    manifest = {
+        "version": 1,
+        "composition": resolve_composition(data, app),
+        "data": data,
+        "overlay_yaml": app_yaml_path(slug).read_text(),
+        "input_hashes": {
+            **{f"data/{p.name}": _sha256_file(p) for p in DATA_DIR.glob("*.yaml")},
+            **{f"templates/{p.name}": _sha256_file(p)
+               for p in [*TEMPLATE_DIR.glob("*.cls"), *TEMPLATE_DIR.glob("*.cfg")]},
+            "scripts/generate.py": _sha256_file(ROOT / "scripts" / "generate.py"),
+            "scripts/application.py": _sha256_file(Path(__file__)),
+        },
+    }
 
     d = app_dir(slug)
-    (d / "cv.tex").write_text(latex)
 
     if args.no_pdf:
+        (d / "cv.tex").write_text(latex)
         print(f"Wrote {d / 'cv.tex'} (skipped PDF)")
         return 0
 
-    rc = _compile_pdf(d)
-    if rc != 0:
-        return rc
-
-    pages = _pdf_pages(d / "cv.pdf")
+    # Publish only a successful, validated build. Keep the previous build on failure.
+    with tempfile.TemporaryDirectory(prefix=".build-", dir=d) as tmp:
+        staged = Path(tmp)
+        (staged / "cv.tex").write_text(latex)
+        rc = _compile_pdf(staged)
+        if rc != 0:
+            return rc
+        pages = _pdf_pages(staged / "cv.pdf")
+        if pages != "2":
+            print(f"Error: expected 2 pages, got {pages}; trim the overlay and rebuild '{slug}'", file=sys.stderr)
+            return 1
+        manifest["pdf_hash"] = _sha256_file(staged / "cv.pdf")
+        manifest["tex_hash"] = _sha256_text(latex)
+        manifest["date_generated"] = datetime.now().isoformat()
+        (staged / "build-manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, default=str, indent=2))
+        for name in ("cv.tex", "cv.pdf", "build-manifest.json"):
+            (staged / name).replace(d / name)
     print(f"Built {d / 'cv.pdf'} ({pages} pages, base: {app['base']})")
     return 0
 
@@ -466,6 +528,47 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def load_built_manifest(slug: str) -> Dict[str, Any]:
+    """Verify the PDF belongs to the recorded build, independent of YAML drift."""
+    d = app_dir(slug)
+    try:
+        manifest = json.loads((d / "build-manifest.json").read_text())
+        if (manifest["version"] != 1 or not manifest["pdf_hash"]
+                or _sha256_file(d / "cv.pdf") != manifest["pdf_hash"]
+                or not isinstance(manifest["composition"], dict)
+                or not isinstance(manifest["overlay_yaml"], str)):
+            raise ValueError("PDF and build manifest do not match")
+        required = {"role_type": str, "highlights": list, "strength_indices": list,
+                    "strengths": list, "expertise_tags": list, "experience": list, "spec": dict}
+        if not isinstance(manifest["date_generated"], str) or not all(
+            isinstance(manifest["composition"][key], kind) for key, kind in required.items()
+        ):
+            raise ValueError("Incomplete build composition")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f"Rebuild '{slug}' before recording it as sent: {exc}") from exc
+    return manifest
+
+
+def _archive_build(slug: str, manifest: Dict[str, Any]) -> Path:
+    """Keep content-addressed copies so later builds cannot overwrite sent files."""
+    text = json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2)
+    archive = app_dir(slug) / "sent" / _sha256_text(text)
+    archive.mkdir(parents=True, exist_ok=True)
+    pdf = archive / "cv.pdf"
+    manifest_path = archive / "build-manifest.json"
+    for target, content in ((pdf, (app_dir(slug) / "cv.pdf").read_bytes()),
+                            (manifest_path, text.encode("utf-8"))):
+        if target.exists():
+            if target.read_bytes() != content:
+                raise ValueError(f"Archived artifact changed: {target}")
+        else:
+            with target.open("xb") as f:
+                f.write(content)
+    if _sha256_file(pdf) != manifest["pdf_hash"]:
+        raise ValueError("PDF changed while archiving; retry the snapshot")
+    return pdf
+
+
 def resolve_composition(data: Dict[str, Any], app: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve the building blocks a build actually renders, mirroring render_cv's
     selection (highlights in order, selected strengths, the first-N experience
@@ -480,7 +583,8 @@ def resolve_composition(data: Dict[str, Any], app: Dict[str, Any]) -> Dict[str, 
     n_exp = spec.get("experience_count", len(experience_all))
     experience_sel = [
         {"company": j.get("company"), "title": j.get("title"),
-         "start": j.get("start_date"), "end": j.get("end_date")}
+         "start": j.get("start_date"), "end": j.get("end_date"),
+         "achievements": j.get("achievements", [])[:spec.get("achievements_per_job", 2)]}
         for j in experience_all[:n_exp]
     ]
     return {
@@ -511,35 +615,38 @@ def snapshot_application(slug: str, *, source: str = "cli", sent: bool = False,
     from scripts.job_aggregator.storage import (
         init_db, get_application_by_cv_folder, get_snapshots, create_snapshot,
     )
+    manifest = load_built_manifest(slug) if sent or (app_dir(slug) / "build-manifest.json").exists() else None
+    archived_pdf = _archive_build(slug, manifest) if sent else None
     init_db()
     sync_to_board()  # make sure the folder is mirrored to a linkable board row
     board = get_application_by_cv_folder(slug)
     if not board:
-        print(f"snapshot: no board row for '{slug}' (sync created none)", file=sys.stderr)
-        return None
+        raise ValueError(f"snapshot: no board row for '{slug}' (sync created none)")
 
     app = load_application(slug)
-    data = load_yaml_data(DATA_DIR)
-    comp = resolve_composition(data, app)
+    comp = manifest["composition"] if manifest else resolve_composition(load_yaml_data(DATA_DIR), app)
 
     d = app_dir(slug)
     pdf, tex = d / "cv.pdf", d / "cv.tex"
-    cv_path = str(pdf if pdf.exists() else tex)
-    pdf_hash = _sha256_file(pdf)
-    overlay_text = app_yaml_path(slug).read_text()
+    cv_path = str(archived_pdf or (pdf if manifest else tex))
+    pdf_hash = manifest["pdf_hash"] if manifest else None
+    overlay_text = manifest["overlay_yaml"] if manifest else app_yaml_path(slug).read_text()
     overlay_hash = _sha256_text(overlay_text)
-    date_generated = None
-    if pdf.exists():
-        date_generated = datetime.fromtimestamp(pdf.stat().st_mtime).strftime("%Y-%m-%d")
-    applied = date_applied or (app.get("meta") or {}).get("applied_on")
+    date_generated = manifest["date_generated"] if manifest else None
+    applied = (date_applied or (app.get("meta") or {}).get("applied_on")) if sent else None
     if sent and not applied:
         applied = date.today().isoformat()
     applied = str(applied) if applied else None
 
+    def _j(v):
+        return json.dumps(v, ensure_ascii=False, default=str)
+
     if dedupe:
         for snap in get_snapshots(board["id"]):
             same_comp = (snap.get("overlay_hash") == overlay_hash
-                         and snap.get("pdf_hash") == pdf_hash)
+                         and snap.get("pdf_hash") == pdf_hash
+                         and snap.get("spec_json") == _j(comp["spec"])
+                         and (not sent or snap.get("cv_path") == cv_path))
             # Dedupe only within the same sent-class, so a draft capture cannot
             # mask a later genuine sent snapshot of the same composition.
             same_class = bool(snap.get("sent")) == bool(sent)
@@ -548,9 +655,6 @@ def snapshot_application(slug: str, *, source: str = "cli", sent: bool = False,
                 print(f"snapshot: {kind} composition unchanged for '{slug}' "
                       f"(snapshot #{snap['id']} already records it)")
                 return snap["id"]
-
-    def _j(v):
-        return json.dumps(v, ensure_ascii=False, default=str)
 
     snap_id = create_snapshot(
         board["id"],
@@ -586,16 +690,18 @@ def cmd_set_status(args) -> int:
     if not path.exists():
         print(f"Error: {path} not found", file=sys.stderr)
         return 1
+    load_application(slug)
     text = path.read_text()
-    # Replace the first `status:` line under meta, preserving any inline comment.
-    new_text, n = re.subn(
-        r"(?m)^(\s*status:\s*)\S+(.*)$",
-        rf"\g<1>{new_status}\g<2>",
-        text, count=1,
-    )
-    if n == 0:
+    # Use YAML node offsets so text inside notes cannot be mistaken for status.
+    document = yaml.compose(text)
+    meta_node = next((v for k, v in document.value if k.value == "meta"), None)
+    status_node = next((v for k, v in meta_node.value if k.value == "status"), None) if isinstance(meta_node, yaml.MappingNode) else None
+    if status_node is None:
         print(f"Error: no 'status:' line found in {path}", file=sys.stderr)
         return 1
+    new_text = text[:status_node.start_mark.index] + new_status + text[status_node.end_mark.index:]
+    if new_status == "applied":
+        snapshot_application(slug, source="cli", sent=True)
     path.write_text(new_text)
     print(f"{slug}: status -> {new_status}")
 
@@ -613,8 +719,6 @@ def cmd_set_status(args) -> int:
         board = get_application_by_cv_folder(slug)
         if board:
             update_application(board["id"], status=db_status, _event_source="cli")
-            if new_status == "applied":
-                snapshot_application(slug, source="cli", sent=True)
     return 0
 
 
@@ -874,7 +978,11 @@ def main() -> int:
     p_snap.set_defaults(func=cmd_snapshot)
 
     args = parser.parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    except (ValueError, OSError, yaml.YAMLError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

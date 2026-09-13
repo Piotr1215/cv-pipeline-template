@@ -40,11 +40,13 @@ def escape_latex(text: str) -> str:
 def load_yaml_data(data_dir: Path) -> Dict[str, Any]:
     """Load all YAML files with validation."""
     data = {}
-    required_files = ['personal', 'experience', 'skills', 'strengths', 'education', 'certifications']
+    required_files = ['personal', 'experience', 'skills', 'strengths', 'education']
 
     for yaml_file in data_dir.glob('*.yaml'):
         with open(yaml_file) as f:
             data[yaml_file.stem] = yaml.safe_load(f)
+
+    data['certifications'] = data.get('certifications') or []
 
     # Validate all required files are present
     missing = [f for f in required_files if f not in data]
@@ -300,7 +302,7 @@ def _text_section(title: str, text: str) -> str:
 
 def _languages(skills: Dict[str, Any]) -> str:
     """Languages as tags in the page-1 sidebar."""
-    if 'Languages' not in skills:
+    if not skills.get('Languages'):
         return ''
     s = "\\bigskip\n\n\\cvsection{Languages}\n\n"
     for lang in skills['Languages']:
@@ -358,8 +360,11 @@ def _education(education: List[Dict[str, Any]]) -> str:
 
 
 def _certifications(certifications: List[Dict[str, Any]], limit) -> str:
-    s = "\\cvsection{Certifications}\n\n"
+    certifications = certifications or []
     certs = certifications if limit is None else certifications[:limit]
+    if not certs:
+        return ''
+    s = "\\cvsection{Certifications}\n\n"
     for cert in certs:
         s += f"\\cvtag{{{escape_latex(cert['name'])}}}\n"
     return s
@@ -370,7 +375,7 @@ def render_cv(data: Dict[str, Any], spec: Dict[str, Any]) -> str:
     personal = data['personal']
     skills = data['skills']
     education = data['education']
-    certifications = data['certifications']
+    certifications = data.get('certifications') or []
     strengths_all = data['strengths']
     experience_all = data['experience']
 

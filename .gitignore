@@ -106,6 +106,8 @@ notes/
 # rendered cv.tex and cv.pdf are regenerated with `make applications`.
 applications/*/cv.tex
 applications/*/cv.pdf
+applications/*/build-manifest.json
+applications/*/sent/
 
 # Track the repo-level CLAUDE.md (override the global ~/.gitignore CLAUDE.md exclusion)
 !CLAUDE.md
