@@ -1,0 +1,62 @@
+# Evidence store: the achievements your CV highlights and cover letters draw from.
+#
+# Two layers:
+#   cv_highlights  short, CV-ready lines (the generators and the tailoring brief
+#                  read these; an application overlay selects and rewords them)
+#   wins           the full evidence behind each line, with provenance, so a
+#                  claim can always be traced back to a source
+#
+# Rules that keep this honest (your AI agent reads them too):
+#   - Every line here must be backed by a `wins` entry with a source.
+#   - Record who did what in `attribution`. A metric someone else measured on a
+#     system you built is phrased as enablement ("raised accuracy to ~95%" on
+#     the team's system), never as "I measured".
+#   - Shared work stays shared: "co-led" when it was co-led, "lead" only when
+#     you led. Put anything an overlay must never flatten into attribution_flags.
+#   - Write each line once, neutrally. The per-application overlay tailors it.
+
+meta:
+  source: "issue tracker, merged pull requests, internal announcements"
+  compiled: "2025-01-15"
+  attribution_flags:
+    - "The 60% deployment-time reduction was measured by the release team on the pipeline this candidate built. Phrase as 'cut deployment time by 60%', never 'I measured a 60% reduction'."
+    - "The Kubernetes platform was co-designed with a second engineer. Say 'co-designed', never 'designed' alone."
+
+cv_highlights:
+  - "Cut deployment time by 60% by moving 100+ microservices to GitOps with ArgoCD, replacing hand-run deploy scripts with reviewed, reversible changes"
+  - "Reduced cloud spend by 35% through right-sizing, spot capacity, and per-team cost visibility, without a single user-facing regression"
+  - "Co-designed the Kubernetes platform that now runs every production workload, with self-service namespaces and golden-path CI templates"
+  - "Migrated legacy applications to a cloud-native architecture on AWS, cutting release lead time from weeks to days"
+  - "Built REST APIs serving 1M+ requests a day on Python and PostgreSQL, with load tests and SLO alerts in the pipeline"
+
+wins:
+  - bucket: delivery
+    title: "GitOps migration with ArgoCD"
+    metric: "deployment time down 60%; 100+ services on ArgoCD"
+    date: "2023-06"
+    provenance: "https://github.com/example/platform/pull/123"
+    attribution: "lead. The 60% figure is the release team's measurement on the pipeline (see attribution_flags)."
+  - bucket: cost
+    title: "Cloud cost reduction programme"
+    metric: "35% lower monthly cloud bill over two quarters"
+    date: "2023-11"
+    provenance: "https://example.atlassian.net/browse/PLAT-456"
+    attribution: "lead; finance confirmed the savings in the quarterly review."
+  - bucket: platform
+    title: "Kubernetes platform buildout"
+    metric: "all production workloads migrated; self-service namespaces; golden-path CI templates"
+    date: "2022-09"
+    provenance: "https://example.atlassian.net/browse/PLAT-101"
+    attribution: "co-designed with a second engineer (see attribution_flags)."
+  - bucket: delivery
+    title: "Legacy application migration to AWS"
+    metric: "release lead time from weeks to days"
+    date: "2021-05"
+    provenance: "internal migration report, 2021-05"
+    attribution: "lead"
+  - bucket: product
+    title: "High-throughput REST API platform"
+    metric: "1M+ requests/day; SLO alerts wired into CI"
+    date: "2019-10"
+    provenance: "https://github.com/example/api/pull/88"
+    attribution: "solo author of the API layer; SLO alerts with the SRE team."

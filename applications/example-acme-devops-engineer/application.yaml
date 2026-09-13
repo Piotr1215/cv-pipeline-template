@@ -1,0 +1,73 @@
+# Application: Acme Cloud - Senior DevOps Engineer
+#
+# This file is BOTH the tracking record (meta:) and the CV tailoring overlay
+# (base: + overrides:). Facts live in ../../data/*.yaml; only select / reorder /
+# reword them here. Build with:  python3 -m scripts.application build example-acme-devops-engineer
+
+meta:
+  company: Acme Cloud
+  role: Senior DevOps Engineer
+  location: Remote (EU)
+  url: https://example.com/jobs/123
+  source: manual
+  salary: null
+  status: draft            # draft|applied|screening|interview|offer|accepted|rejected|withdrawn
+  applied_on:              # YYYY-MM-DD once you apply
+  deadline:
+  next_action: review cv.pdf, then submit through the careers page
+  notes: |
+    Example application shipped with the template. The posting is invented;
+    the overlay shows how to select and reword facts from data/*.yaml for one
+    role without adding anything that is not there. Delete this folder (and
+    its board row) once you have your own applications.
+
+
+# Which variant template to start from.
+base: devops-engineer
+
+# Everything here overrides the base variant. Omit a key to inherit it.
+# Common knobs (see .claude/skills/cv-applications for the full schema):
+#   tagline: "..."                       custom one-liner under the name
+#   highlights_order: [3, 0, 2, 4]       reorder/select the base highlight bullets
+#   highlights: ["...", "..."]           replace the highlight bullets outright
+#   expertise_tags: ["...", "..."]       page-2 expertise tags
+#   strength_indices: [5, 1, 2]          which strengths (index into strengths.yaml)
+#   sidebar_extras:                      extra page-1 sidebar prose (e.g. "Why <Company>")
+#     - title: "Why Acme Cloud"
+#       text: "..."
+overrides:
+  tagline: "Senior DevOps Engineer | Kubernetes, GitOps, Cloud Cost"
+
+  profile_paras:
+    - "DevOps engineer who keeps delivery boring: GitOps workflows, CI/CD pipelines, and Terraform-managed infrastructure that product teams can deploy to without a ticket."
+    - "I have run production Kubernetes across AWS and GCP, cut the cloud bill by a third without a user-facing regression, and moved 100+ services onto ArgoCD. I carry the pager for what I build and write the runbooks the next person needs."
+    - "Remote across EU time zones, and used to working async with distributed teams."
+
+  # Selected and reworded from data/wins.yaml and data/experience.yaml only.
+  # The 60% figure keeps the phrasing required by wins.yaml attribution_flags.
+  highlights:
+    - "Cut deployment time by 60% by moving 100+ microservices to GitOps with ArgoCD, replacing hand-run deploy scripts with reviewed, reversible changes"
+    - "Reduced cloud spend by 35% through right-sizing, spot capacity, and per-team cost visibility, without a single user-facing regression"
+    - "Co-designed the Kubernetes platform that now runs every production workload, with self-service namespaces and golden-path CI templates"
+    - "Automated CI/CD end to end with GitHub Actions and Terraform, so every environment change ships through a reviewed pipeline"
+    - "Built monitoring and alerting with Prometheus and CloudWatch, and wrote the runbooks the on-call rotation works from"
+
+  strength_indices: [1, 3, 2]
+
+  expertise_tags:
+    - "GitOps & CI/CD"
+    - "Kubernetes Operations"
+    - "Infrastructure as Code"
+    - "Cloud Cost"
+    - "On-call & Runbooks"
+
+  tech_groups:
+    - label: "Cloud Platforms"
+      tags: ["AWS", "GCP", "Azure"]
+
+  sidebar_extras:
+    - title: "Why Acme Cloud"
+      text: "Owning the pipeline that 40 engineers ship through every day is the job I have been doing, and the multi-cloud Kubernetes estate matches the AWS and GCP platforms I have run. I like being the person a deploy problem lands on, and I like writing the runbook so it lands on me less."
+
+  experience_count: 4
+  achievements_per_job: 2

@@ -97,3 +97,22 @@ package-lock.json
 tmp/
 temp/
 .cache/
+
+# Job aggregator board (local state) and company research notes
+jobs.db
+notes/
+
+# Applications: the overlay (application.yaml) and posting are tracked; the
+# rendered cv.tex and cv.pdf are regenerated with `make applications`.
+applications/*/cv.tex
+applications/*/cv.pdf
+
+# Track the repo-level CLAUDE.md (override the global ~/.gitignore CLAUDE.md exclusion)
+!CLAUDE.md
+
+# Track project skills under .claude/skills/ (override the global ~/.gitignore .claude/
+# exclusion). Everything else under .claude/ (plans, specs, sessions) stays local.
+!.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/**

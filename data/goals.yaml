@@ -1,0 +1,148 @@
+# Job search goals. Drives the job aggregator (scoring, source filtering, the
+# LLM title filter) and the prompts the TUI hands to your AI agent.
+# Every list is matched lowercase against titles, tags, and descriptions.
+
+# Profiles in priority order. Each must be a CV variant (see SPEC_BUILDERS in
+# scripts/generate.py and taglines in data/personal.yaml). The jobs table has
+# three score slots, so the first three profiles are scored.
+priorities:
+  - devops-engineer
+  - cloud-engineer
+  - software-developer
+
+# What you want to work on, whatever the title says. Used in the evaluation prompt.
+core_focus:
+  - Kubernetes
+  - Cloud Native (CNCF ecosystem)
+  - GitOps
+  - Infrastructure as Code
+
+roles:
+  devops-engineer:
+    priority: 1
+    title_variations:          # a title containing one of these scores +40
+      - DevOps Engineer
+      - Platform Engineer
+      - Site Reliability Engineer
+      - Infrastructure Engineer
+    title_patterns:            # extra title fragments that also count as a match
+      - sre
+      - devsecops
+      - reliability engineer
+    filter_hint: "engineering roles that own delivery and infrastructure; reject sysadmin and helpdesk"
+    must_have:
+      - Remote work (EU eligible)
+      - Kubernetes or container orchestration
+      - Infrastructure as Code
+    nice_to_have:
+      - GitOps (ArgoCD, Flux)
+      - Multi-cloud experience
+      - Developer platform building (IDPs)
+    deal_breakers:
+      - Legacy on-prem only
+      - No containers
+      - Office-only
+
+  cloud-engineer:
+    priority: 2
+    title_variations:
+      - Cloud Engineer
+      - Cloud Architect
+      - Cloud Infrastructure Engineer
+    filter_hint: "hands-on cloud infrastructure roles; reject pure sales engineering"
+    must_have:
+      - Remote work (EU eligible)
+      - AWS, GCP, or Azure
+    nice_to_have:
+      - Terraform
+      - Cost optimization
+      - Migration projects
+    deal_breakers:
+      - Office-only
+
+  software-developer:
+    priority: 3
+    title_variations:
+      - Software Engineer
+      - Software Developer
+      - Backend Engineer
+      - Backend Developer
+    skills:                    # replaces the shared `skills.priority` list for this role
+      - go
+      - python
+      - postgresql
+      - rest
+      - grpc
+    filter_hint: "backend or full-stack product roles; reject frontend-only and mobile"
+    must_have:
+      - Remote work (EU eligible)
+    nice_to_have:
+      - Go or Python
+      - Distributed systems
+    deal_breakers:
+      - Office-only
+
+# Skill keywords for scoring (0-25 points for priority, 0-15 for general).
+skills:
+  priority:
+    - kubernetes
+    - k8s
+    - argocd
+    - flux
+    - helm
+    - gitops
+    - crossplane
+    - terraform
+  general:
+    - go
+    - golang
+    - python
+    - aws
+    - gcp
+    - azure
+    - docker
+    - ci/cd
+    - github actions
+    - prometheus
+    - grafana
+    - observability
+
+# Source-side search tags (e.g. RemoteOK). Defaults to the title keywords.
+search_tags:
+  - devops
+  - kubernetes
+  - golang
+  - python
+  - sre
+  - platform
+
+# Location filtering. `allow` keeps a job when its location mentions one of
+# these, `deny` drops it, `bonus` is a list of tiers worth 10, 8, and 5 points.
+location:
+  allow: [worldwide, anywhere, global, europe, eu, emea, remote]
+  deny: ["usa only", "us only", "united states only", "us citizens only"]
+  bonus:
+    - [germany]
+    - [europe, "eu ", emea, uk, united kingdom, netherlands, poland, spain, portugal]
+    - [remote, worldwide, global]
+
+min_score: 30
+
+# Optional ntfy.sh topic for `make jobs-notify` (env JOBS_NTFY_TOPIC overrides).
+# Topics are public: pick a long random one.
+notifications:
+  ntfy_topic: ""
+
+# Free-text preferences the evaluation prompt can draw on.
+general_preferences:
+  location:
+    - Fully remote
+    - EU timezone friendly
+  company_stage:
+    preferred:
+      - Series B+
+      - Public companies
+  culture:
+    - Developer-focused
+    - Open source friendly
+    - Async-first communication

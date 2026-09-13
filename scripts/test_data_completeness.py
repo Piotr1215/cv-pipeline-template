@@ -11,6 +11,10 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Any
 
+# Make `scripts.generate` importable when run directly (python3 scripts/test_data_completeness.py).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.generate import SPEC_BUILDERS, build_spec  # noqa: E402
+
 def load_yaml_data(data_dir: Path) -> Dict[str, Any]:
     """Load all YAML data files."""
     data = {}
@@ -34,31 +38,23 @@ def get_pdf_text(pdf_path: Path) -> str:
         return ""
 
 def normalize_text(text: str) -> str:
-    """Normalize text for comparison (lowercase, remove extra whitespace, normalize quotes and ligatures).
+    """Normalize text for comparison (lowercase, collapse whitespace, unfold ligatures and quotes).
 
-    CRITICAL: LaTeX produces ligatures (fi, fl, ff, ffi, ffl) which appear as single Unicode
-    characters in PDF text extraction. We MUST normalize these to ensure YAML data matches PDF text.
-    This is essential for test reliability.
+    pdflatex emits fi/fl/ff/ffi/ffl as single Unicode ligature glyphs, so "Certified"
+    extracts as "Certiﬁed". Unfold them or every word containing one fails the check.
     """
-    # Replace LaTeX ligatures with their component letters
-    # These are the most common ligatures produced by pdflatex
     ligature_map = {
-        '\ufb01': 'fi',  # ﬁ -> fi (CRITICAL for "Certified", "profile", etc.)
-        '\ufb02': 'fl',  # ﬂ -> fl (for "fluent", "workflow", etc.)
-        '\ufb00': 'ff',  # ﬀ -> ff (for "office", "efficient", etc.)
-        '\ufb03': 'ffi', # ﬃ -> ffi (for "efficient", "office", etc.)
-        '\ufb04': 'ffl', # ﬄ -> ffl (for "offline", etc.)
-        '\u00ad': '',    # soft hyphen (optional line break)
+        '\ufb01': 'fi', '\ufb02': 'fl', '\ufb00': 'ff',
+        '\ufb03': 'ffi', '\ufb04': 'ffl',
+        '\u00ad': '',  # soft hyphen (optional line break)
     }
     for ligature, replacement in ligature_map.items():
         text = text.replace(ligature, replacement)
-
-    # Normalize various apostrophe/quote characters to standard ones
+    # Normalize various apostrophe/quote characters to standard ones using Unicode
     text = text.replace('\u2019', "'")  # Right single quotation mark
     text = text.replace('\u2018', "'")  # Left single quotation mark
     text = text.replace('\u201c', '"')  # Left double quotation mark
     text = text.replace('\u201d', '"')  # Right double quotation mark
-
     return ' '.join(text.lower().split())
 
 def check_experience(data: Dict, pdf_text: str, variant: str) -> List[str]:
@@ -66,7 +62,9 @@ def check_experience(data: Dict, pdf_text: str, variant: str) -> List[str]:
     issues = []
     pdf_normalized = normalize_text(pdf_text)
 
-    for idx, job in enumerate(data['experience'][:3]):  # Templates show first 3 for single-page layout
+    # All variants share the 2-page layout: first 5 roles render on page 2.
+    exp_limit = 5
+    for idx, job in enumerate(data['experience'][:exp_limit]):
         job_title = normalize_text(job['title'])
         company = normalize_text(job['company'])
 
@@ -129,9 +127,8 @@ def check_certifications(data: Dict, pdf_text: str, variant: str) -> List[str]:
     issues = []
     pdf_normalized = normalize_text(pdf_text)
 
-    # Developer advocate template limits to first 5 certifications
-    # All variants now show only first 4 certifications for single-page layout
-    cert_limit = 4
+    # Each variant's spec decides how many certifications render (None = all).
+    cert_limit = build_spec(variant, data).get('cert_limit') or len(data['certifications'])
 
     for cert in data['certifications'][:cert_limit]:
         cert_name = normalize_text(cert['name'])
@@ -170,10 +167,11 @@ def check_strengths(data: Dict, pdf_text: str, variant: str) -> List[str]:
     issues = []
     pdf_normalized = normalize_text(pdf_text)
 
-    # All variants now show 3 strengths for single-page layout
-    strength_limit = 3
+    # Each variant's spec selects role-tailored strengths by index into strengths.yaml.
+    indices = build_spec(variant, data)['strength_indices']
+    selected = [data['strengths'][i] for i in indices if i < len(data['strengths'])]
 
-    for strength in data['strengths'][:strength_limit]:
+    for strength in selected:
         title_normalized = normalize_text(strength['title'])
 
         # Check if title appears as exact substring OR all words are present
@@ -187,9 +185,9 @@ def check_strengths(data: Dict, pdf_text: str, variant: str) -> List[str]:
         if not title_found:
             issues.append(f"Missing strength title: {strength['title']}")
 
-        # Check description is present (at least first 20 chars to handle line breaks)
+        # Check description is present (at least first 30 chars)
         desc = normalize_text(strength['description'])
-        if desc[:20] not in pdf_normalized:
+        if desc[:30] not in pdf_normalized:
             issues.append(f"Missing strength description: {strength['title']}")
 
     return issues
@@ -295,7 +293,7 @@ def main():
     if args.variant:
         variants = [args.variant]
     else:
-        variants = ['software-developer', 'devops-engineer', 'cloud-engineer']
+        variants = list(SPEC_BUILDERS)
 
     print("CV Data Completeness Test")
     print("="*60)
