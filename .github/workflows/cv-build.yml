@@ -44,7 +44,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y python3 python3-pip poppler-utils
-          pip3 install -r requirements.txt --break-system-packages
+          pip3 install --ignore-installed -r requirements.txt --break-system-packages
 
       # Generate .tex from YAML
       - name: Generate LaTeX from YAML
