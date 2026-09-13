@@ -39,7 +39,7 @@ cd output/generated && pdflatex -interaction=nonstopmode -halt-on-error devops-e
 
 Pipeline: `data/*.yaml` -> `scripts/generate.py` -> `output/generated/*.tex` -> pdflatex -> `*.pdf`
 
-No Jinja2 templates. Generation is pure Python: `render_cv(data, spec)` owns one shared layout, and each variant is a `spec` dict built by a `_spec_<variant>()` function registered in `SPEC_BUILDERS`. Only content differs per variant.
+Generation is pure Python: `render_cv(data, spec)` owns one shared layout, and each variant is a `spec` dict built by a `_spec_<variant>()` function registered in `SPEC_BUILDERS`. Only content differs per variant.
 
 ### Key Files
 
