@@ -9,7 +9,7 @@
 # Rules that keep this honest (your AI agent reads them too):
 #   - Every line here must be backed by a `wins` entry with a source.
 #   - Record who did what in `attribution`. A metric someone else measured on a
-#     system you built is phrased as enablement ("raised accuracy to ~95%" on
+#     system you built is phrased as an outcome of the system ("cut build time by 40%" on
 #     the team's system), never as "I measured".
 #   - Shared work stays shared: "co-led" when it was co-led, "lead" only when
 #     you led. Put anything an overlay must never flatten into attribution_flags.

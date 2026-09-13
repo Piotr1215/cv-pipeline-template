@@ -186,8 +186,8 @@ is a worked example against the sample data; delete it once real applications ex
 - Never invent facts. Only select and reword what is already in `data/*.yaml`.
 - Respect `data/wins.yaml` `meta.attribution_flags`. They record whose measurement
   a metric is and which work was shared. A figure a colleague measured on a system
-  the user built is phrased as an outcome of the system ("raised accuracy to
-  ~95%"), never "I measured". Co-led work stays "co-led"; solo work stays solo.
+  the user built is phrased as an outcome of the system ("cut build time by
+  40%"), never "I measured". Co-led work stays "co-led"; solo work stays solo.
 - Do not echo the job posting's competency checklist verbatim as tags or lines;
   ground them in what the user actually does. No casual filler.
 - Global style: no em-dashes, no `**` in prose. Proofread cover letters and any
