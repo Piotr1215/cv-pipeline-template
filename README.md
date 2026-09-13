@@ -31,13 +31,13 @@ graph LR
 ```
 
 **The Right Approach:**
-- AI writes structured data (YAML facts)
+- YOU write the facts as structured YAML (AI may help you structure them, never invent them)
 - YOU control the pipeline and output
 - Consistent quality across all variants
 - Version controlled career narrative
 - Update once → all CVs updated automatically
 
-**And then the useful part**: once the facts are structured, an AI agent can do the job it is good at, which is matching. Given a posting and your master facts, it selects the achievements that fit, rewords them in the posting's language, and builds a tailored two-page PDF, while an attribution layer stops it from inflating anything. That is what the rest of this template adds.
+**Non-intrusive AI.** The agent never gets a blank page. At tailoring time it receives a bounded menu (the posting, every fact in your YAML, and the attribution flags that say what must not be inflated) and its only job is to select, reorder, and reword from that menu. It cannot add a metric, a title, or a date that is not already in `data/`, and two project skills hold it to that workflow step by step. Hallucination is closed off by the shape of the task, not by asking nicely. Because the agent reads and writes files you version, you can also ignore it entirely and edit the overlay by hand.
 
 ## The Positioning System
 
