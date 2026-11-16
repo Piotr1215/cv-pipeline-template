@@ -5,7 +5,8 @@ DATA_DIR = data
 TEMPLATE_DIR = templates
 OUTPUT_DIR = output/generated
 # Use the project virtualenv if present (run `make setup` once), else system python3.
-PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+TEXLIVE_IMAGE := ghcr.io/xu-cheng/texlive-debian:20261001@sha256:78ac2204b8df113aca0561e8f173ad5b89ee51e90795173d2fe9bcf0fbce162e
 
 all: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf) test
 
@@ -63,7 +64,7 @@ $(OUTPUT_DIR)/%.pdf: $(OUTPUT_DIR)/%.tex
 	@cp $(TEMPLATE_DIR)/altacv-class/*.cls $(OUTPUT_DIR)/ 2>/dev/null || true
 	@cp $(TEMPLATE_DIR)/altacv-class/*.cfg $(OUTPUT_DIR)/ 2>/dev/null || true
 	@echo "==> Compiling $*.tex to PDF..."
-	cd $(OUTPUT_DIR) && pdflatex -interaction=nonstopmode -halt-on-error $*.tex
+	@cd $(OUTPUT_DIR) && { pdflatex -interaction=nonstopmode -halt-on-error $*.tex || { sed -n '/^!/{p; :a; n; p; ba;}' $*.log | head -30; exit 1; }; }
 	@echo ""
 	@echo "==> Validating PDF..."
 	@pdfinfo $@ | head -5
@@ -84,7 +85,7 @@ test: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf)
 	@$(PYTHON) scripts/test_data_completeness.py
 	@echo "==> Running phase-5 substrate tests..."
 	@$(PYTHON) scripts/test_phase5_substrate.py
-	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections
+	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections scripts.test_application_status
 
 # Generate ATS-friendly plain-text versions (independent of LaTeX)
 ATS_OUTPUT_DIR = output/ats
@@ -98,7 +99,7 @@ ats-all: $(foreach v,$(VARIANTS),$(ATS_OUTPUT_DIR)/$(v).txt)
 # Phase-5 outcome substrate tests only (timeline + composition snapshots).
 test-substrate:
 	@$(PYTHON) scripts/test_phase5_substrate.py
-	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections
+	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections scripts.test_application_status
 
 # Clean all generated files
 clean:
@@ -135,3 +136,31 @@ open:
 
 open-app:
 	@$(PYTHON) -m scripts.application open $(SLUG)
+
+# The same inner targets run in GitHub Actions and the local container.
+.PHONY: ci ci-inner ci-variant ci-applications ci-setup print-texlive-image
+print-texlive-image:
+	@echo $(TEXLIVE_IMAGE)
+
+ci-setup:
+	apt-get update
+	apt-get install -y python3 python3-venv poppler-utils make
+	python3 -m venv .venv
+	.venv/bin/python -m pip install -r requirements.txt
+
+ci-variant:
+	$(MAKE) -B $(OUTPUT_DIR)/$(VARIANT).pdf $(ATS_OUTPUT_DIR)/$(VARIANT).txt PYTHON=$(PYTHON)
+	$(PYTHON) scripts/test_data_completeness.py --variant $(VARIANT)
+
+ci-applications:
+	$(PYTHON) -m scripts.application build-all
+
+ci-inner:
+	$(MAKE) ci-setup
+	@for variant in $(VARIANTS); do $(MAKE) ci-variant VARIANT=$$variant PYTHON=.venv/bin/python || exit $$?; done
+	$(MAKE) test-substrate PYTHON=.venv/bin/python
+	$(MAKE) ci-applications PYTHON=.venv/bin/python
+
+ci:
+	@runtime=$$(command -v docker || command -v podman) || { echo "Install docker or podman to run CI" >&2; exit 1; }; \
+		"$$runtime" run --rm -v "$(CURDIR):/workspace" -v /workspace/.venv -w /workspace $(TEXLIVE_IMAGE) make ci-inner

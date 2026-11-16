@@ -336,6 +336,14 @@ sequenceDiagram
 5. Test suite verifies 100% data completeness
 6. GitHub Actions automates entire workflow
 
+## Run CI locally
+
+Run `make ci` with Docker or Podman installed. It runs the pinned TeX Live image, installs Python dependencies in an isolated virtual environment, builds all three variants and ATS files, runs the tests, and builds every tailored application. Each application build requires a two-page PDF. The repository is mounted into the container, so generated files appear in the working tree.
+
+The image is set once in `TEXLIVE_IMAGE` in the Makefile. To update it, choose a TeX Live image tag, verify its registry digest, update the tag and digest together, and run `make ci` before submitting the change. GitHub Actions reads the same value from the Makefile.
+
+Successful builds on `main` update one rolling release. Download a variant from `https://github.com/<owner>/<repo>/releases/latest/download/<variant>.pdf`, for example `https://github.com/<owner>/<repo>/releases/latest/download/devops-engineer.pdf`.
+
 ## Troubleshooting
 
 ### PDFs not generating locally?
