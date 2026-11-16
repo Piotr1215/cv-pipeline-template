@@ -34,7 +34,7 @@ jobs:
     outputs:
       texlive: ${{ steps.image.outputs.texlive }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - id: image
@@ -50,7 +50,7 @@ jobs:
         variant: [software-developer, devops-engineer, cloud-engineer]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - name: Install dependencies
@@ -59,13 +59,13 @@ jobs:
         run: make ci-variant VARIANT=${{ matrix.variant }} PYTHON=.venv/bin/python
       - name: Upload LaTeX logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: latex-logs-${{ matrix.variant }}
           path: output/**/*.log
           if-no-files-found: ignore
       - name: Upload CV files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: cv-${{ matrix.variant }}
           path: |
@@ -79,7 +79,7 @@ jobs:
     container:
       image: ${{ needs.image.outputs.texlive }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - name: Install dependencies
@@ -90,7 +90,7 @@ jobs:
         run: make ci-applications PYTHON=.venv/bin/python
       - name: Upload LaTeX logs on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: latex-logs-applications
           path: output/**/*.log
@@ -107,7 +107,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: cv-artifacts
       - name: Update rolling release
