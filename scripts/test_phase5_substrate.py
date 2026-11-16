@@ -184,14 +184,12 @@ def test_sent_snapshot_rejects_missing_or_changed_build_before_board_write():
             assert not storage.DB_PATH.exists(), "validation must precede board writes"
     with _built_application() as (application, folder):
         (folder / "cv.pdf").write_bytes(b"a different PDF")
-        try:
-            application.cmd_set_status(SimpleNamespace(slug="example", status="applied"))
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Changed PDF accepted")
+        assert application.cmd_set_status(SimpleNamespace(slug="example", status="applied")) == 1
         assert application.load_application("example")["meta"]["status"] == "draft"
-        assert not storage.DB_PATH.exists()
+        board = storage.get_application_by_cv_folder("example")
+        assert board["status"] == "2-Applied"
+        assert not storage.get_snapshots(board["id"])
+        assert storage.get_events(board["id"])[-1]["event_type"] == "snapshot failed"
 
 
 def test_draft_capture_never_inherits_applied_date():
@@ -211,7 +209,7 @@ def test_cli_status_changes_only_meta_status_and_keeps_comments():
         assert application.cmd_set_status(SimpleNamespace(slug="example", status="applied")) == 0
         text = path.read_text()
         assert "status: do not change" in text
-        assert "status: applied # keep comment" in text
+        assert 'status: "draft" # keep comment' in text
         board = storage.get_application_by_cv_folder("example")
         assert board["status"] == "2-Applied"
         assert storage.get_latest_snapshot(board["id"])["sent"] == 1

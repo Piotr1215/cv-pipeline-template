@@ -79,6 +79,7 @@ LOCATION_DENY = [k.lower() for k in _loc.get("deny", [])]
 LOCATION_BONUS = [[k.lower() for k in tier] for tier in _loc.get("bonus", [])]
 
 MIN_SCORE_THRESHOLD = int(_goals.get("min_score", 30))
+MIN_FIT = int(_goals.get("min_fit", 70))
 
 # ntfy.sh topic for `jobs-notify`. Env JOBS_NTFY_TOPIC wins, then goals.yaml
 # `notifications.ntfy_topic`. Pick something unguessable: topics are public.
@@ -88,4 +89,7 @@ NTFY_TOPIC = os.environ.get("JOBS_NTFY_TOPIC") or _goals.get("notifications", {}
 
 def get_goals():
     """Return the full goals dict for prompt generation."""
-    return _goals
+    if not _GOALS_PATH.exists():
+        return {}
+    with open(_GOALS_PATH) as f:
+        return yaml.safe_load(f) or {}

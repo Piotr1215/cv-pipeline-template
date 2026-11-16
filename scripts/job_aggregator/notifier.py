@@ -13,10 +13,7 @@ def send_notification(jobs: List[Dict]):
         return
 
     for job in jobs:
-        slots = [(job.get(col, 0) or 0, PROFILE_LABELS[p]) for p, col in zip(PROFILES, SCORE_COLUMNS)]
-        best_score, best_profile = max(slots)
-
-        title = f"[{best_profile}] {job['title']}"
+        title = f"[{job['fit']}] {job['title']}"
         message = f"{job['company']} - {job.get('location', 'Remote')}"
         if job.get("salary"):
             message += f"\n{job['salary']}"

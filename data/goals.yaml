@@ -1,5 +1,5 @@
 # Job search goals. Drives the job aggregator (scoring, source filtering, the
-# LLM title filter) and the prompts the TUI hands to your AI agent.
+# LLM fit judge) and the prompts the TUI hands to your AI agent.
 # Every list is matched lowercase against titles, tags, and descriptions.
 
 # Profiles in priority order. Each must be a CV variant (see SPEC_BUILDERS in
@@ -116,17 +116,22 @@ search_tags:
   - sre
   - platform
 
-# Location filtering. `allow` keeps a job when its location mentions one of
-# these, `deny` drops it, `bonus` is a list of tiers worth 10, 8, and 5 points.
+# Location filter, applied before the LLM judge. A job whose location
+# contains a `deny` phrase is dropped. An empty `allow` list keeps every other
+# job; otherwise a job is kept when its location names an `allow` entry as a
+# whole word. `remote` keeps any remote job, whatever region it names, and a
+# bare "Remote" is always kept. List the places you can work from, for
+# example [remote, europe, eu, emea] or [usa, canada]. `bonus` tiers add 10,
+# 8 and 5 points to the keyword score: put the places you prefer most first.
 location:
-  allow: [worldwide, anywhere, global, europe, eu, emea, remote]
+  allow: [worldwide, anywhere, global, remote, europe, eu, emea]
   deny: ["usa only", "us only", "united states only", "us citizens only"]
   bonus:
-    - [germany]
-    - [europe, "eu ", emea, uk, united kingdom, netherlands, poland, spain, portugal]
     - [remote, worldwide, global]
+    - [europe, "eu ", emea]
 
 min_score: 30
+min_fit: 70
 
 # Optional ntfy.sh topic for `make jobs-notify` (env JOBS_NTFY_TOPIC overrides).
 # Topics are public: pick a long random one.

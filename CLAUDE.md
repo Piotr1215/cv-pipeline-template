@@ -88,7 +88,7 @@ Variants are role TYPES (starting templates). Each real posting is an applicatio
 
 - One file per application: `applications/<slug>/application.yaml` is BOTH the tracking record (`meta:`) and the overlay (`base: <variant>` + `overrides:`). Facts stay in `data/*.yaml`; the overlay only selects, reorders, and rewords them.
 - Build: `python3 -m scripts.application build <slug>` (or `make applications`) renders `cv.tex` + `cv.pdf` into the folder. Never hand-edit `cv.tex`.
-- Track: `python3 -m scripts.application status` (or `make applications-status`) prints the pipeline board; `set-status <slug> <status>` updates it.
+- Track: `python3 -m scripts.application status` (or `make applications-status`) prints live board status and marks YAML-only seeds with `*`; `set-status <slug> <status>` updates SQLite. Run `export-status` to copy status and applied date to YAML, or `export-status --check` to report drift.
 - Tailor: `python3 -m scripts.application tailor <slug>` prints a brief (posting + master facts + attribution flags); the agent writes honest `overrides:` from it, then builds. Never invent facts.
 - Promote from the funnel: `new <slug> --from-job <id>` prefills `meta` from the job aggregator's `jobs.db`.
 - Outcome history: every board status change is appended to the `application_events` timeline, and the applied transition freezes an immutable `application_snapshots` row (the resolved composition plus PDF and overlay hashes), because the overlay, spec, and master YAML drift and cannot reconstruct what was sent. Inspect with `events <slug>`, log an event with `event <slug> <type>`, backfill with `snapshot <slug>`. Snapshots carry a `sent` flag: the applied transition sets `sent=1`; a manual `snapshot` is a draft unless you pass `--sent`. Any future analysis counts only snapshots with `sent=1` or a non-null `date_applied`.
@@ -109,10 +109,10 @@ All variants share ONE fixed 2-page two-column layout, owned by `render_cv(data,
 
 ## Job Aggregator
 
-TUI: `make jobs-tui` or `python3 -m scripts.job_aggregator.tui` (needs `make setup` once for the textual dependency). Targets, scoring keywords, and location rules come from `data/goals.yaml`.
+TUI: `make jobs-tui` or `python3 -m scripts.job_aggregator.tui` (needs `make setup` once for the textual dependency). Targets, scoring keywords, and location rules come from `data/goals.yaml`. Set `JOBS_JUDGE_MODEL` to choose the Claude CLI model, or `JOBS_JUDGE=0` to skip judging. Jobs remain unjudged when the CLI is unavailable.
 
 Key bindings:
-- `p` - Pull jobs from all sources (Remotive, DevRelCareers, RemoteOK, Himalayas, CNCF boards, WeWorkRemotely)
+- `p` - Pull jobs from all sources (Remotive, RemoteOK, Himalayas, CNCF boards, WeWorkRemotely, Arbeitnow)
 - `l` - Open job URL in browser
 - `c` - Hand the selected row to the AI agent pane in this tmux window (evaluate a job, or build the CV for an application)
 - `a` - Apply (move to Applications, archive from Jobs)

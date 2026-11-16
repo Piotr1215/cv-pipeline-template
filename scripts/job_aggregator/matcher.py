@@ -15,13 +15,22 @@ def normalize(text: str) -> str:
 
 
 def location_ok(location: str) -> bool:
-    """Check if location is acceptable."""
-    loc = location.lower()
+    """Apply the goals.yaml `location` rule to one job location.
+
+    A location that contains a `deny` phrase is dropped. With an empty `allow`
+    list every other job is kept. Otherwise a job is kept when its location
+    names an `allow` entry as a whole word, so the entry "remote" keeps any
+    remote job whatever region it names. A bare "Remote" names no region and
+    is always kept. A blank location matches nothing and is dropped.
+    """
+    loc = (location or "").lower()
     if any(deny in loc for deny in LOCATION_DENY):
         return False
-    if any(allow in loc for allow in LOCATION_ALLOW):
+    if not LOCATION_ALLOW:
         return True
-    return True  # Default allow if unclear
+    if any(re.search(rf"\b{re.escape(allow)}\b", loc) for allow in LOCATION_ALLOW):
+        return True
+    return "remote" in loc and not re.sub(r"remote|[^a-z]", "", loc)
 
 
 def score_job(job: Dict, profile: str) -> int:
@@ -77,15 +86,9 @@ def score_job(job: Dict, profile: str) -> int:
     return min(score, 100)
 
 
-def filter_and_score(jobs: List[Dict], use_llm_filter: bool = False,
-                     progress=None) -> List[Tuple[Dict, Dict]]:
-    """Filter by location, score for all profiles.
-
-    When use_llm_filter is set, a final cheap-model pass (title_filter) drops
-    titles that do not fit the target roles, so off-profile jobs are never
-    stored. Off by default so tests and other callers stay offline and fast;
-    the real pull sites (tui, cli) pass use_llm_filter=True.
-    """
+def filter_and_score(jobs: List[Dict]) -> List[Tuple[Dict, Dict]]:
+    """Filter by location, keyword-score for all profiles. Offline and cheap;
+    the LLM judge (judge.py) decides fit afterwards, in pull.py."""
     results = []
     for job in jobs:
         loc = job.get("candidate_required_location", "")
@@ -94,15 +97,5 @@ def filter_and_score(jobs: List[Dict], use_llm_filter: bool = False,
 
         scores = {profile: score_job(job, profile) for profile in PROFILES}
         results.append((job, scores))
-
-    if use_llm_filter and results:
-        from .title_filter import relevant_titles
-        if progress:
-            progress(f"AI title filter on {len(results)} jobs...")
-        mask = relevant_titles([job.get("title", "") for job, _ in results])
-        kept = [r for r, keep in zip(results, mask) if keep]
-        if progress:
-            progress(f"AI filter kept {len(kept)} of {len(results)} on-profile jobs")
-        results = kept
 
     return results
