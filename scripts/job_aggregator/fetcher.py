@@ -5,10 +5,16 @@ from .config import ALL_TITLE_KEYWORDS, SEARCH_TAGS
 import time
 import re
 import hashlib
+import html
 from typing import List, Dict
 from bs4 import BeautifulSoup
 
 REMOTIVE_API = "https://remotive.com/api/remote-jobs"
+HEADERS = {"User-Agent": "CV-Pipeline Job Aggregator/1.0"}
+
+# Use the template owner's configured title variations for large boards.
+def title_passes_gate(title: str) -> bool:
+    return not ALL_TITLE_KEYWORDS or any(kw in (title or "").lower() for kw in ALL_TITLE_KEYWORDS)
 
 
 def fetch_remotive(category: str = None, search: str = None, limit: int = 100) -> List[Dict]:
@@ -37,75 +43,6 @@ def fetch_all_remotive(categories: List[str]) -> List[Dict]:
                 seen_ids.add(job["id"])
                 job["source"] = "remotive"
                 jobs.append(job)
-
-    return jobs
-
-
-def fetch_devrelcareers(max_days_old: int = 30) -> List[Dict]:
-    """Fetch DevRelCareers jobs from their sitemap."""
-    from datetime import datetime, timedelta
-    jobs = []
-    cutoff = datetime.now() - timedelta(days=max_days_old)
-
-    try:
-        resp = requests.get("https://devrelcareers.com/sitemap-jobs.xml", timeout=30)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "xml")
-
-        for url_elem in soup.find_all("url"):
-            loc = url_elem.find("loc")
-            lastmod = url_elem.find("lastmod")
-
-            if not loc:
-                continue
-
-            url = loc.get_text(strip=True)
-            if "/job/" not in url:
-                continue
-
-            # Parse date and filter by age
-            pub_date = None
-            if lastmod:
-                try:
-                    pub_date = datetime.strptime(lastmod.get_text(strip=True), "%Y-%m-%d")
-                    if pub_date < cutoff:
-                        continue
-                except ValueError:
-                    pass
-
-            # Extract info from URL slug: /job/1234567-title-here-company
-            slug = url.split("/job/")[-1]
-            parts = slug.split("-", 1)
-            if len(parts) < 2:
-                continue
-
-            # Title is in the slug, convert dashes to spaces and titlecase
-            title_slug = parts[1]
-            title = title_slug.replace("-", " ").title()
-
-            # Try to extract company from end of title (usually last word)
-            words = title_slug.split("-")
-            company = words[-1].title() if words else "Unknown"
-
-            # Generate stable ID from URL
-            job_id = int(hashlib.md5(url.encode()).hexdigest()[:8], 16)
-
-            jobs.append({
-                "id": job_id,
-                "source": "devrelcareers",
-                "url": url,
-                "title": title,
-                "company_name": company,
-                "candidate_required_location": "Remote",
-                "salary": None,
-                "tags": ["devrel", "developer-relations", "developer-advocate"],
-                "category": "DevRel",
-                "job_type": "full_time",
-                "publication_date": pub_date.strftime("%Y-%m-%d") if pub_date else None,
-                "description": "",
-            })
-    except Exception as e:
-        print(f"DevRelCareers fetch error: {e}")
 
     return jobs
 
@@ -180,8 +117,7 @@ def fetch_remoteok(tags: List[str] = None) -> List[Dict]:
     jobs = []
     try:
         # RemoteOK requires a user-agent
-        headers = {"User-Agent": "CV-Pipeline Job Aggregator/1.0"}
-        resp = requests.get("https://remoteok.com/api", headers=headers, timeout=30)
+        resp = requests.get("https://remoteok.com/api", headers=HEADERS, timeout=30)
         resp.raise_for_status()
         data = resp.json()
 
@@ -221,77 +157,84 @@ def fetch_remoteok(tags: List[str] = None) -> List[Dict]:
     return jobs
 
 
-def fetch_himalayas(limit: int = 100) -> List[Dict]:
-    """Fetch jobs from Himalayas API (max 20 per request)."""
+# Search the configured role titles; country can be supplied by the caller.
+HIMALAYAS_SEARCHES = [(term, None) for term in SEARCH_TAGS]
+
+
+def fetch_himalayas(searches=None, pages: int = 2, country: str = None) -> List[Dict]:
+    """Search Himalayas (20 per page) for each (query, seniority) pair."""
     jobs = []
     seen_ids = set()
-
-    try:
-        # Fetch multiple pages (API max is 20 per request)
-        for offset in range(0, limit, 20):
+    for query, seniority in searches or HIMALAYAS_SEARCHES:
+        for page in range(1, pages + 1):
+            params = {"q": query, "page": page}
+            if country:
+                params["country"] = country
+            if seniority:
+                params["seniority"] = seniority
             time.sleep(0.5)  # Rate limiting
-            resp = requests.get(
-                f"https://himalayas.app/jobs/api?limit=20&offset={offset}",
-                timeout=30
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            # API returns {"jobs": [...], "totalCount": N, ...}
-            job_list = data.get("jobs", [])
-            if not job_list:
+            try:
+                resp = requests.get("https://himalayas.app/jobs/api/search",
+                                    params=params, headers=HEADERS, timeout=30)
+                resp.raise_for_status()
+                job_list = resp.json().get("jobs", [])
+            except Exception as e:
+                print(f"Himalayas search error ({query}, {seniority}): {e}")
                 break
 
             for item in job_list:
                 guid = item.get("guid", "")
-                if guid in seen_ids:
+                if not guid or guid in seen_ids:
                     continue
                 seen_ids.add(guid)
-
-                # Generate stable ID from guid
-                job_id = int(hashlib.md5(guid.encode()).hexdigest()[:8], 16)
-
-                # Parse salary
-                salary = None
-                if item.get("minSalary") or item.get("maxSalary"):
-                    currency = item.get("currency", "USD")
-                    min_sal = item.get("minSalary", "")
-                    max_sal = item.get("maxSalary", "")
-                    if min_sal and max_sal:
-                        salary = f"{currency} {min_sal}-{max_sal}"
-                    elif max_sal:
-                        salary = f"{currency} up to {max_sal}"
-
-                # Location from restrictions
-                locations = item.get("locationRestrictions", [])
-                location = ", ".join(locations[:3]) if locations else "Remote"
-
-                # Convert Unix timestamp to date string
-                pub_ts = item.get("pubDate")
-                pub_date = None
-                if pub_ts and isinstance(pub_ts, (int, float)):
-                    from datetime import datetime
-                    pub_date = datetime.fromtimestamp(pub_ts).strftime("%Y-%m-%d")
-
-                jobs.append({
-                    "id": job_id,
-                    "source": "himalayas",
-                    "url": item.get("applicationLink", ""),
-                    "title": item.get("title", "Unknown"),
-                    "company_name": item.get("companyName", "Unknown"),
-                    "candidate_required_location": location,
-                    "salary": salary,
-                    "tags": item.get("categories", []) + item.get("parentCategories", []),
-                    "category": item.get("parentCategories", ["other"])[0] if item.get("parentCategories") else "other",
-                    "job_type": item.get("employmentType", "Full Time").lower().replace(" ", "_"),
-                    "publication_date": pub_date,
-                    "description": item.get("excerpt", ""),
-                })
-
-    except Exception as e:
-        print(f"Himalayas fetch error: {e}")
-
+                jobs.append(_himalayas_job(item))
+            if len(job_list) < 20:
+                break
     return jobs
+
+
+def _himalayas_job(item: Dict) -> Dict:
+    """Map one Himalayas API item onto the aggregator's job dict."""
+    from datetime import datetime
+    guid = item.get("guid", "")
+    salary = None
+    if item.get("minSalary") or item.get("maxSalary"):
+        currency = item.get("currency", "USD")
+        min_sal, max_sal = item.get("minSalary", ""), item.get("maxSalary", "")
+        if min_sal and max_sal:
+            salary = f"{currency} {min_sal}-{max_sal}"
+        elif max_sal:
+            salary = f"{currency} up to {max_sal}"
+
+    # Empty restrictions means hiring worldwide. Keep every country: truncating
+    # the list can hide the one that makes a job eligible.
+    locations = item.get("locationRestrictions") or []
+    location = ", ".join(locations) if locations else "Worldwide"
+
+    pub_ts = item.get("pubDate")
+    pub_date = (datetime.fromtimestamp(pub_ts).strftime("%Y-%m-%d")
+                if isinstance(pub_ts, (int, float)) else None)
+
+    # Rows stored on 2026-06-24 came back with companyName == "name"; fall back
+    # to the slug so a placeholder never reaches the board.
+    company = item.get("companyName") or ""
+    if not company or company.strip().lower() == "name":
+        company = (item.get("companySlug") or "Unknown").replace("-", " ").title()
+
+    return {
+        "id": int(hashlib.md5(guid.encode()).hexdigest()[:8], 16),
+        "source": "himalayas",
+        "url": item.get("applicationLink", ""),
+        "title": item.get("title", "Unknown"),
+        "company_name": company,
+        "candidate_required_location": location,
+        "salary": salary,
+        "tags": item.get("categories", []) + item.get("parentCategories", []),
+        "category": (item.get("parentCategories") or ["other"])[0],
+        "job_type": (item.get("employmentType") or "Full Time").lower().replace(" ", "_"),
+        "publication_date": pub_date,
+        "description": item.get("description") or item.get("excerpt") or "",
+    }
 
 
 def fetch_cncf_jobs() -> List[Dict]:
@@ -301,24 +244,14 @@ def fetch_cncf_jobs() -> List[Dict]:
     Instead, we scrape Greenhouse/Lever boards from known CNCF member companies.
     """
     jobs = []
-    headers = {"User-Agent": "CV-Pipeline Job Aggregator/1.0"}
 
-    # CNCF member companies with public job boards (Greenhouse/Lever)
+    # Companies with public Greenhouse boards. Checked 2026-09-21: the other ids
+    # this list carried (kubermatic, isovalent, buoyant, weaveworks, hashicorp,
+    # suse, d2iq, giantswarm, pulumi, tetrate, soloio) all return 404.
     # Format: (company_name, board_type, board_id, tags)
     cncf_companies = [
         ("Form3", "greenhouse", "form3", ["fintech", "payments"]),
-        ("Kubermatic", "greenhouse", "kubermatic", ["kubernetes"]),
-        ("Isovalent", "greenhouse", "isovalent", ["cilium", "ebpf"]),
-        ("Buoyant", "greenhouse", "buoyant", ["linkerd", "service-mesh"]),
-        ("Weaveworks", "greenhouse", "weaveworks", ["gitops", "flux"]),
         ("Grafana Labs", "greenhouse", "grafanalabs", ["observability", "prometheus"]),
-        ("HashiCorp", "greenhouse", "hashicorp", ["terraform", "vault"]),
-        ("SUSE", "greenhouse", "suse", ["rancher", "kubernetes"]),
-        ("D2iQ", "greenhouse", "d2iq", ["kubernetes"]),
-        ("Giant Swarm", "greenhouse", "giantswarm", ["kubernetes"]),
-        ("Pulumi", "greenhouse", "pulumi", ["iac", "cloud"]),
-        ("Tetrate", "greenhouse", "tetrate", ["istio", "service-mesh"]),
-        ("Solo.io", "greenhouse", "soloio", ["istio", "envoy"]),
         ("Datadog", "greenhouse", "datadog", ["observability", "monitoring"]),
     ]
 
@@ -355,7 +288,8 @@ def fetch_cncf_jobs() -> List[Dict]:
                         "category": "cloud-native",
                         "job_type": "full_time",
                         "publication_date": item.get("updated_at", "")[:10] if item.get("updated_at") else None,
-                        "description": "",
+                        # content=true returns the posting as escaped HTML
+                        "description": html.unescape(item.get("content") or ""),
                     })
 
         except Exception as e:
@@ -368,7 +302,6 @@ def fetch_cncf_jobs() -> List[Dict]:
 def fetch_weworkremotely() -> List[Dict]:
     """Fetch jobs from WeWorkRemotely RSS feeds."""
     jobs = []
-    headers = {"User-Agent": "CV-Pipeline Job Aggregator/1.0"}
 
     # RSS feeds for relevant categories
     rss_feeds = [
@@ -381,11 +314,10 @@ def fetch_weworkremotely() -> List[Dict]:
     for rss_url, category in rss_feeds:
         try:
             time.sleep(0.5)
-            resp = requests.get(rss_url, headers=headers, timeout=30)
-            if resp.status_code != 200:
-                continue
+            resp = requests.get(rss_url, headers=HEADERS, timeout=30)
+            resp.raise_for_status()
 
-            soup = BeautifulSoup(resp.text, "xml")
+            soup = BeautifulSoup(resp.text, "xml")  # needs lxml (requirements.txt)
 
             for item in soup.find_all("item"):
                 try:
@@ -447,7 +379,8 @@ def fetch_weworkremotely() -> List[Dict]:
                         "category": category,
                         "job_type": "full_time",
                         "publication_date": pub_date,
-                        "description": "",
+                        "description": (item.find("description").get_text()
+                                        if item.find("description") else ""),
                     })
 
                 except Exception:
@@ -522,7 +455,7 @@ def fetch_arbeitnow() -> List[Dict]:
                 "category": "engineering",
                 "job_type": "full_time",
                 "publication_date": pub_date,
-                "description": "",
+                "description": item.get("description", ""),
             })
 
     except Exception as e:
@@ -531,12 +464,15 @@ def fetch_arbeitnow() -> List[Dict]:
     return jobs
 
 
-def fetch_all_sources(remotive_categories: List[str], progress=None) -> List[Dict]:
+def fetch_all_sources(remotive_categories: List[str], progress=None,
+                      empty_sources: List[str] = None) -> List[Dict]:
     """Fetch from all configured sources.
 
     progress: optional callback(message: str) for live UI feedback (e.g. the TUI
-    status bar). Each source reports before fetching and the running job total
-    after. Always also prints, so the CLI path is unchanged.
+    status bar). Each source reports before fetching and its job count after.
+    Always also prints, so the CLI path is unchanged.
+    empty_sources: optional list; the label of every source that failed or
+    returned no jobs is appended, so the caller can surface a dead source.
     """
     jobs = []
 
@@ -548,9 +484,8 @@ def fetch_all_sources(remotive_categories: List[str], progress=None) -> List[Dic
     # (label, thunk, pre-sleep seconds)
     sources = [
         ("Remotive", lambda: fetch_all_remotive(remotive_categories), 0),
-        ("DevRelCareers", fetch_devrelcareers, 0),
         ("RemoteOK", lambda: fetch_remoteok(tags=SEARCH_TAGS), 1),
-        ("Himalayas", lambda: fetch_himalayas(limit=100), 0),
+        ("Himalayas", lambda: fetch_himalayas(), 0),
         ("CNCF companies", fetch_cncf_jobs, 1),
         ("WeWorkRemotely", fetch_weworkremotely, 1),
         ("Arbeitnow", fetch_arbeitnow, 1),
@@ -561,9 +496,13 @@ def fetch_all_sources(remotive_categories: List[str], progress=None) -> List[Dic
         if presleep:
             time.sleep(presleep)
         try:
-            jobs.extend(thunk())
+            found = thunk()
         except Exception as e:
-            report(f"  {label} failed: {e}")
-        report(f"[{i}/{len(sources)}] {label} done — {len(jobs)} jobs so far")
+            found = []
+            report(f"[{i}/{len(sources)}] {label} failed: {e}")
+        if not found and empty_sources is not None:
+            empty_sources.append(label)
+        jobs.extend(found)
+        report(f"[{i}/{len(sources)}] {label}: {len(found)} jobs ({len(jobs)} total)")
 
     return jobs

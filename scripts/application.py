@@ -18,7 +18,8 @@ Commands:
   build <slug>   render + compile applications/<slug>/cv.pdf
   build-all      build every application
   status         print the application pipeline board
-  set-status <slug> <status>   update meta.status in place
+  set-status <slug> <status>   update live board status
+  export-status [--check]     export/check the Git-tracked status copy
   tailor <slug>  print a tailoring brief (posting + master facts) for the AI assistant to
                  turn into overrides, then build
 
@@ -51,10 +52,10 @@ APPLICATIONS_DIR = ROOT / "applications"
 TEMPLATE_DIR = ROOT / "templates" / "altacv-class"
 JOBS_DB = ROOT / "jobs.db"
 
-# Status pipeline (ordered). application.yaml is the source of truth; this is the
-# vocabulary the board groups and sorts by.
+# SQLite owns live status. YAML status/date fields seed new rows and are an
+# explicitly exported copy for Git reviews, not a second live authority.
 STATUSES = ["draft", "applied", "screening", "interview", "offer",
-            "accepted", "rejected", "withdrawn"]
+            "accepted", "rejected", "withdrawn", "stale"]
 
 # Map our folder status vocabulary onto the TUI board (jobs.db) status codes, so a
 # folder can seed a board row. Used only when a board row is first created from a
@@ -68,6 +69,7 @@ _DB_STATUS_BY_FOLDER = {
     "accepted": "6-Accepted",
     "rejected": "90-Rejected",
     "withdrawn": "91-Withdrawn",
+    "stale": "92-Stale",
 }
 
 
@@ -470,21 +472,28 @@ def cmd_sync(args) -> int:
 
 
 def cmd_status(args) -> int:
+    from scripts.job_aggregator.storage import init_db, get_application_by_cv_folder
+    init_db()
     rows = []
+    print("Live status: SQLite board. * = YAML-only seed, not verified against a board row.")
     for slug in list_application_slugs():
         try:
             app = load_application(slug)
         except Exception as e:
-            rows.append((slug, "?", "ERROR", "", "", str(e)))
+            rows.append((slug, "?", "ERROR", "", "", str(e), "", ""))
             continue
         meta = app.get("meta") or {}
-        status = (meta.get("status") or "draft").lower()
+        board = get_application_by_cv_folder(slug)
+        status = ({v: k for k, v in _DB_STATUS_BY_FOLDER.items()}.get(
+            board["status"], board["status"]) if board else
+            (meta.get("status") or "draft").lower() + "*")
+        applied = board.get("date_applied") if board else meta.get("applied_on")
         rows.append((
             slug,
             app.get("base", "?"),
             status,
-            str(meta.get("applied_on") or ""),
-            _days_since(meta.get("applied_on")),
+            str(applied or ""),
+            _days_since(applied),
             meta.get("company") or "",
             meta.get("role") or "",
             meta.get("next_action") or "",
@@ -495,7 +504,7 @@ def cmd_status(args) -> int:
         return 0
 
     order = {s: i for i, s in enumerate(STATUSES)}
-    rows.sort(key=lambda r: (order.get(r[2], 99), r[3]))
+    rows.sort(key=lambda r: (order.get(r[2].rstrip("*"), 99), r[3]))
 
     print(f"{'STATUS':<11}{'SLUG':<40}{'BASE':<24}{'APPLIED':<12}{'AGE':<6}COMPANY / ROLE")
     print("-" * 120)
@@ -509,7 +518,8 @@ def cmd_status(args) -> int:
 
     counts = {}
     for r in rows:
-        counts[r[2]] = counts.get(r[2], 0) + 1
+        key = r[2].rstrip("*")
+        counts[key] = counts.get(key, 0) + 1
     print("  ".join(f"{s}:{counts[s]}" for s in STATUSES if s in counts))
     return 0
 
@@ -633,7 +643,7 @@ def snapshot_application(slug: str, *, source: str = "cli", sent: bool = False,
     overlay_text = manifest["overlay_yaml"] if manifest else app_yaml_path(slug).read_text()
     overlay_hash = _sha256_text(overlay_text)
     date_generated = manifest["date_generated"] if manifest else None
-    applied = (date_applied or (app.get("meta") or {}).get("applied_on")) if sent else None
+    applied = (date_applied or board.get("date_applied") or (app.get("meta") or {}).get("applied_on")) if sent else None
     if sent and not applied:
         applied = date.today().isoformat()
     applied = str(applied) if applied else None
@@ -690,36 +700,107 @@ def cmd_set_status(args) -> int:
     if not path.exists():
         print(f"Error: {path} not found", file=sys.stderr)
         return 1
-    load_application(slug)
-    text = path.read_text()
-    # Use YAML node offsets so text inside notes cannot be mistaken for status.
-    document = yaml.compose(text)
-    meta_node = next((v for k, v in document.value if k.value == "meta"), None)
-    status_node = next((v for k, v in meta_node.value if k.value == "status"), None) if isinstance(meta_node, yaml.MappingNode) else None
-    if status_node is None:
-        print(f"Error: no 'status:' line found in {path}", file=sys.stderr)
+    from scripts.job_aggregator.storage import (
+        init_db, get_application_by_cv_folder, update_application,
+    )
+    init_db()
+    sync_to_board()
+    board = get_application_by_cv_folder(slug)
+    if not board:
+        print(f"Error: no board row for {slug}", file=sys.stderr)
         return 1
-    new_text = text[:status_node.start_mark.index] + new_status + text[status_node.end_mark.index:]
+    update_application(board["id"], status=_DB_STATUS_BY_FOLDER[new_status],
+                       _event_source="cli")
     if new_status == "applied":
-        snapshot_application(slug, source="cli", sent=True)
-    path.write_text(new_text)
-    print(f"{slug}: status -> {new_status}")
+        try:
+            capture_sent_snapshot(slug, source="cli")
+        except Exception as exc:
+            print(f"Status saved, but submission snapshot failed: {exc}. "
+                  f"Retry: python3 -m scripts.application snapshot {slug} --sent",
+                  file=sys.stderr)
+            return 1
+    print(f"{slug}: board status -> {new_status}")
+    return 0
 
-    # Mirror onto the TUI board and record the transition on the outcome timeline
-    # (phase 5). The board still owns current status; update_application appends
-    # the event. On 'applied', also freeze the composition snapshot of what was
-    # actually sent.
-    db_status = _DB_STATUS_BY_FOLDER.get(new_status)
-    if db_status:
-        from scripts.job_aggregator.storage import (
-            init_db, get_application_by_cv_folder, update_application,
-        )
-        init_db()
-        sync_to_board()
+
+def capture_sent_snapshot(slug: str, *, source: str) -> int:
+    """Capture submission evidence; record failures and propagate them to the UI."""
+    from scripts.job_aggregator.storage import get_application_by_cv_folder, log_event
+    try:
+        result = snapshot_application(slug, source=source, sent=True)
+        if result is None:
+            raise RuntimeError("no snapshot was created")
+        return result
+    except Exception as exc:
         board = get_application_by_cv_folder(slug)
         if board:
-            update_application(board["id"], status=db_status, _event_source="cli")
-    return 0
+            log_event(board["id"], "snapshot failed", source=source,
+                      note=f"{type(exc).__name__}: {exc}. Retry snapshot {slug} --sent")
+        raise
+
+
+def cmd_export_status(args) -> int:
+    """Export live board status/date to YAML without rewriting notes or overlays.
+
+    --check reports drift without modifying either store. Missing board rows are
+    reported, never seeded here: a fresh checkout cannot verify live status.
+    """
+    from scripts.job_aggregator.storage import init_db, get_application_by_cv_folder
+    init_db()
+    reverse = {v: k for k, v in _DB_STATUS_BY_FOLDER.items()}
+    failed = False
+    for slug in list_application_slugs():
+        board = get_application_by_cv_folder(slug)
+        if not board:
+            print(f"{slug}: no board row; live status unknown", file=sys.stderr)
+            failed = True
+            continue
+        folder_status = reverse.get(board["status"])
+        if folder_status is None:
+            print(f"{slug}: unsupported board status {board['status']!r}; YAML unchanged",
+                  file=sys.stderr)
+            failed = True
+            continue
+        path = app_yaml_path(slug)
+        text = path.read_text()
+        document = yaml.compose(text)
+        meta = next(v for k, v in document.value if k.value == "meta")
+        values = {"status": folder_status,
+                  "applied_on": str(board.get("date_applied") or "")}
+        changes = []
+        for key, value in meta.value:
+            if key.value in values:
+                expected = values.pop(key.value)
+                current = "" if value.tag.endswith(":null") else value.value
+                if current != expected:
+                    start = text.index(":", key.end_mark.index) + 1
+                    end = text.find("\n", start)
+                    if end == -1:
+                        end = len(text)
+                    old = text[start:end]
+                    comment = "  #" + old.split("#", 1)[1] if "#" in old else ""
+                    changes.append((start, end, " " + (expected or "null") + comment))
+        # Insert missing fields at the beginning of meta, before its first key.
+        if values:
+            offset = meta.start_mark.index
+            changes.append((offset, offset, "".join(
+                f"{key}: {value or 'null'}\n{' ' * meta.start_mark.column}" for key, value in values.items())))
+        if changes:
+            print(f"{slug}: {'drift' if args.check else 'exported board status/date'}")
+            if args.check:
+                failed = True
+            else:
+                for start, end, value in sorted(changes, reverse=True):
+                    text = text[:start] + value + text[end:]
+                # Reject unsupported YAML shapes rather than corrupting the overlay.
+                before, after = yaml.safe_load(path.read_text()), yaml.safe_load(text)
+                expected = dict(before)
+                expected["meta"] = dict(before["meta"], status=folder_status,
+                                        applied_on=yaml.safe_load(str(board.get("date_applied") or "null")))
+                if after != expected:
+                    raise ValueError(f"Cannot safely export status for {slug}")
+                path.write_text(text)
+    return int(failed)
 
 
 def cmd_events(args) -> int:
@@ -946,7 +1027,11 @@ def main() -> int:
     p_sync = sub.add_parser("sync", help="mirror application folders into the TUI board (jobs.db)")
     p_sync.set_defaults(func=cmd_sync)
 
-    p_set = sub.add_parser("set-status", help="update meta.status in place")
+    p_export = sub.add_parser("export-status", help="export board status/date to Git-tracked YAML")
+    p_export.add_argument("--check", action="store_true", help="report drift without writing")
+    p_export.set_defaults(func=cmd_export_status)
+
+    p_set = sub.add_parser("set-status", help="update live board status")
     p_set.add_argument("slug"); p_set.add_argument("status")
     p_set.set_defaults(func=cmd_set_status)
 

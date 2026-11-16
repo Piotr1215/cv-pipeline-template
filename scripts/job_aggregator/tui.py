@@ -17,13 +17,11 @@ from textual.screen import ModalScreen
 from .storage import (
     init_db, get_db, get_jobs, hide_job, unhide_job, get_applications, get_archived_applications,
     create_application, update_application, delete_application, archive_application,
-    unarchive_application, upsert_job, APPLICATION_STATUSES,
+    unarchive_application, APPLICATION_STATUSES,
     init_companies_table, get_companies, get_company_by_name, create_company, delete_company
 )
-from .config import (REMOTIVE_CATEGORIES, MIN_SCORE_THRESHOLD, PROFILES, PROFILE_LABELS,
-                     SCORE_COLUMNS, get_goals)
-from .fetcher import fetch_all_sources
-from .matcher import filter_and_score
+from .config import get_goals
+from .pull import run_pull
 
 from pathlib import Path
 
@@ -66,17 +64,18 @@ class StatusModal(ModalScreen):
         self._initialized = True
 
     def on_select_changed(self, event: Select.Changed) -> None:
-        if not self._initialized:
+        if not self._initialized or event.value == Select.BLANK:
             return
+        update_application(self.app_id, status=event.value, _event_source="tui")
         # On 'applied', freeze the composition snapshot (phase 5) for a linked CV.
         if event.value == "2-Applied" and self.cv_folder:
             try:
-                from scripts.application import snapshot_application
-                snapshot_application(self.cv_folder, source="tui", sent=True)
-            except (ValueError, OSError, yaml.YAMLError) as exc:
-                self.notify(str(exc), severity="error", timeout=10)
-                return
-        update_application(self.app_id, status=event.value, _event_source="tui")
+                from scripts.application import capture_sent_snapshot
+                capture_sent_snapshot(self.cv_folder, source="tui")
+            except Exception as exc:
+                self.notify(f"Status saved, but submission snapshot failed: {exc}. "
+                            f"Retry: python3 -m scripts.application snapshot {self.cv_folder} --sent",
+                            severity="error", timeout=30)
         self.dismiss(True)
 
 
@@ -115,16 +114,17 @@ class DetailsModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         if self.is_job:
-            slots = [(PROFILE_LABELS[p], self.data.get(col, 0) or 0) for p, col in zip(PROFILES, SCORE_COLUMNS)]
-            score = max((v for _, v in slots), default=0)
-            breakdown = " ".join(f"{label}:{v}" for label, v in slots)
+            fit = self.data.get("fit")
+            score = str(fit) if fit is not None else "Unjudged"
+            reason = self.data.get("fit_reason") or "-"
             details = f"""Title: {self.data.get('title', 'N/A')}
 Company: {self.data.get('company', 'N/A')}
 Location: {self.data.get('location', 'Remote')}
 Salary: {self.data.get('salary', 'N/A')}
 Category: {self.data.get('category', 'N/A')}
 Type: {self.data.get('job_type', 'N/A')}
-Score: {score} ({breakdown})
+Fit: {score}
+Reason: {reason}
 Tags: {self.data.get('tags', '[]')}
 Published: {self.data.get('publication_date', 'N/A')}
 URL: {self.data.get('url', 'N/A')}"""
@@ -177,6 +177,7 @@ class JobTrackerApp(App):
     }
     #status-bar {
         dock: bottom;
+        margin-bottom: 1;  /* sit above the Footer, which also docks bottom */
         height: 1;
         background: $primary;
         color: $text;
@@ -278,7 +279,7 @@ class JobTrackerApp(App):
         table.cursor_type = "row"
         table.zebra_stripes = True
         table.add_column("#", key="num")
-        table.add_column("Score", key="score")
+        table.add_column("Fit", key="score")
         table.add_column("Title", key="title")
         table.add_column("Company", key="company")
         table.add_column("Location", key="location")
@@ -362,7 +363,7 @@ class JobTrackerApp(App):
             self.jobs_data = all_jobs
 
         for idx, job in enumerate(self.jobs_data, 1):
-            score = max((job.get(col, 0) or 0) for col in SCORE_COLUMNS)
+            score = str(job["fit"]) if job.get("fit") is not None else "Unjudged"
             # Keep ISO date format (YYYY-MM-DD) for correct sorting
             posted = (job.get("publication_date") or "")[:10]
             # Short source names for display
@@ -570,8 +571,8 @@ class JobTrackerApp(App):
             last_pull = last_pull[:16].replace("T", " ")
 
         # Score distribution
-        high_score = conn.execute("SELECT COUNT(*) FROM jobs WHERE MAX(score_1, score_2, score_3) >= 70").fetchone()[0]
-        mid_score = conn.execute("SELECT COUNT(*) FROM jobs WHERE MAX(score_1, score_2, score_3) >= 50 AND MAX(score_1, score_2, score_3) < 70").fetchone()[0]
+        high_score = conn.execute("SELECT COUNT(*) FROM jobs WHERE fit >= 70").fetchone()[0]
+        mid_score = conn.execute("SELECT COUNT(*) FROM jobs WHERE fit >= 50 AND fit < 70").fetchone()[0]
 
         conn.close()
 
@@ -613,6 +614,7 @@ class JobTrackerApp(App):
   o      Open tailored CV
   s      Change status
   x      Archive application
+  d      Delete application
   u      Restore from archive
 
 [yellow]Companies[/yellow]
@@ -632,8 +634,8 @@ class JobTrackerApp(App):
 Jobs visible:      {visible:>5}
 Jobs archived:     {archived:>5}
 Applications:      {apps:>5}
-High score (70+):  {high_score:>5}
-Mid score (50-69): {mid_score:>5}
+High fit (70+):    {high_score:>5}
+Mid fit (50-69):   {mid_score:>5}
 Total in DB:       {total:>5}
 
 [bold cyan]JOB SOURCES[/bold cyan]
@@ -776,16 +778,10 @@ Threshold: 30
         def set_status(msg: str):
             self.call_from_thread(status.update, msg)
 
-        jobs = fetch_all_sources(REMOTIVE_CATEGORIES, progress=set_status)
-        set_status(f"Scoring {len(jobs)} jobs...")
-        scored = filter_and_score(jobs, use_llm_filter=True, progress=set_status)
-        new_count = 0
-        for job, scores in scored:
-            if upsert_job(job, scores):
-                new_count += 1
+        summary = run_pull(progress=set_status)
         self.call_from_thread(self.refresh_data)
-        set_status(f"Pull complete: {new_count} new of {len(jobs)} seen")
-        self.call_from_thread(self.notify, f"Found {new_count} new jobs ({len(jobs)} seen)")
+        self.call_from_thread(self.notify,
+                              f"Found {summary['new']} new jobs ({summary['fetched']} seen)")
 
     def action_open_url(self) -> None:
         tab = self._get_current_tab()
@@ -831,11 +827,13 @@ Threshold: 30
             self.notify(f"Added: {job['title']}")
 
     def action_delete_job(self) -> None:
-        """Soft-delete a job (hide permanently), or delete company."""
+        """Soft-delete a job (hide permanently), delete an application, or delete company."""
         job = self._get_selected_job()
         company = self._get_selected_company()
 
-        if job:
+        if self._get_selected_app():
+            self.action_delete()
+        elif job:
             # Capture job identity FIRST (from row key, not cursor index)
             job_source = job["source"]
             job_id = job["id"]
@@ -1000,6 +998,12 @@ Threshold: 30
     def action_delete(self) -> None:
         app = self._get_selected_app()
         if app:
+            if app.get("cv_folder"):
+                # sync_to_board recreates a row for every folder on the next start,
+                # so deleting it here would not stick.
+                self.notify(f"Has CV folder applications/{app['cv_folder']}: archive with x instead",
+                            severity="warning")
+                return
             table = self.query_one("#apps-table", DataTable)
             cursor_pos = table.cursor_row
             delete_application(app["id"])

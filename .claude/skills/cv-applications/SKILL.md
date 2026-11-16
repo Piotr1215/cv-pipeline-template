@@ -73,6 +73,8 @@ python3 -m scripts.application build <slug>       # render + compile cv.pdf in t
 python3 -m scripts.application build-all
 python3 -m scripts.application status             # the pipeline board (spreadsheet view)
 python3 -m scripts.application set-status <slug> <status>
+python3 -m scripts.application export-status [--check]  # export or check board status
+python3 -m scripts.application export-status [--check]  # export or check board status
 python3 -m scripts.application sync               # mirror folders -> TUI board (jobs.db)
 python3 -m scripts.application open [name]         # open a CV pdf (fzf picker if no name)
 python3 -m scripts.application events <slug>      # outcome timeline + composition snapshots
@@ -95,7 +97,7 @@ actually pursued. Promote a job into an application with `new --from-job`.
 - They are linked by the `cv_folder` column on the applications table. `sync`
   mirrors each folder onto the board (idempotent); the TUI also runs sync on
   startup. Once a row exists, the BOARD owns its status (sync won't reset it);
-  sync only creates missing rows and backfills the folder link.
+  sync only creates missing rows and backfills the folder link. `status` marks YAML-only seeds with `*`; export the board status to YAML explicitly. `status` marks YAML-only seeds with `*`; export the board status to YAML explicitly.
 
 Kanban flow (the user decides, you execute). `c` in the TUI types a prompt into
 the agent's tmux pane via `send-keys` (see `_send_to_claude`), context-aware by tab:
@@ -179,7 +181,7 @@ is a worked example against the sample data; delete it once real applications ex
    angle.
 4. `python3 -m scripts.application build <slug>` and confirm it is 2 pages
    (`pdfinfo applications/<slug>/cv.pdf | grep Pages`).
-5. `set-status <slug> applied` and set `applied_on` when submitted.
+5. Run `set-status <slug> applied` when submitted, then `export-status` and `export-status --check`. If the snapshot fails, retry with the submitted files before rebuilding.
 
 ## Honesty guardrails (do not violate)
 

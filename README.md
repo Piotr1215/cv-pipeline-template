@@ -77,6 +77,8 @@ python3 -m scripts.application build acme-devops      # -> applications/acme-dev
 # track it
 python3 -m scripts.application status                 # the pipeline board
 python3 -m scripts.application set-status acme-devops applied
+python3 -m scripts.application export-status           # copy live status to YAML
+python3 -m scripts.application export-status --check   # report drift
 python3 -m scripts.application events acme-devops     # outcome timeline + snapshots
 ```
 
@@ -97,6 +99,12 @@ Two project skills auto-load in this repo (`.claude/skills/` for Claude Code, mi
 
 Ask your agent to "tailor a CV for this posting" to run the brief, draft overrides, build, and identify claims it could not support from your facts. Review the result before sending.
 
+### Live status, Git exports, and submission evidence
+
+The SQLite board owns live status once an application row exists. YAML status and applied date seed new rows and serve as a Git-tracked export. `status` marks YAML-only seeds with `*`; it does not create a row. Use `set-status` or the TUI to change the board, then run `export-status` and review the YAML diff. `export-status --check` reports drift or missing rows without writing.
+
+When an applied transition cannot capture submission evidence, the status stays saved and the command reports the failure. Retry `python3 -m scripts.application snapshot <slug> --sent` with the submitted files before rebuilding. Back up the local database and sent artifacts.
+
 ### Outcome history
 
 Every board status change appends to an `application_events` timeline. Each successful two-page application build saves a manifest with the resolved composition, input hashes, and PDF hash. The applied transition records that build in `application_snapshots` and archives its exact PDF and manifest. Later changes to the overlay or master data do not rewrite the recorded build composition. A sent snapshot requires a matching PDF and manifest; rebuild if either is missing or they no longer match. Mark an application as applied only after sending that PDF. Manifests, sent archives, and `jobs.db` stay local and gitignored; include them in your backups. The aggregate analysis on top is intentionally not built yet; the skill explains the discipline for when it is (patterns across many applications, never an explanation for one).
@@ -108,7 +116,7 @@ make setup        # one-time venv with the TUI dependency
 make jobs-tui     # pull jobs, score them, promote to applications, hand rows to your agent
 ```
 
-Sources: Remotive, DevRelCareers, RemoteOK, Himalayas, CNCF member boards, WeWorkRemotely. Scoring, title keywords, location rules, and the LLM title filter all read `data/goals.yaml`, so the funnel targets your roles, not the template author's. In the TUI, `c` on a job hands an evaluation prompt to the `claude` or `codex` pane in your tmux window; `c` on an application hands it the tailoring task. `a` promotes a job to the Applications tab; `s` advances its status (which also snapshots the sent composition). Optional push notifications go through an ntfy.sh topic you set in `goals.yaml` or `JOBS_NTFY_TOPIC`.
+Sources: Remotive, RemoteOK, Himalayas, CNCF member boards, WeWorkRemotely, and Arbeitnow. The fit judge, title keywords, and location rules read `data/goals.yaml`. The judge uses the Claude CLI when available; set `JOBS_JUDGE=0` to skip it or `JOBS_JUDGE_MODEL` to choose a model. Jobs remain unjudged if the CLI is unavailable or judging is disabled. In the TUI, `c` on a job hands an evaluation prompt to the `claude` or `codex` pane in your tmux window; `c` on an application hands it the tailoring task. `a` promotes a job to the Applications tab; `s` advances its status (which also snapshots the sent composition). Optional push notifications go through an ntfy.sh topic you set in `goals.yaml` or `JOBS_NTFY_TOPIC`.
 
 ## Quick Start
 

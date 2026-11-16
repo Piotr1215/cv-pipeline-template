@@ -45,6 +45,7 @@ EVENT_TYPES = [
     "withdrawn",
     "ghosted",
     "status changed",
+    "snapshot failed",
 ]
 
 # Coarse board status -> timeline event name (used when auto-logging a transition).
@@ -179,6 +180,13 @@ def init_db():
         conn.execute("ALTER TABLE application_snapshots ADD COLUMN sent INTEGER NOT NULL DEFAULT 0")
     except:
         pass  # Column already exists
+    # LLM judge verdict per job (fit NULL = not judged yet), plus the description
+    # it read, so a job can be judged again after goals.yaml changes. (migration)
+    for column in ("fit INTEGER", "fit_role TEXT", "fit_reason TEXT", "description TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {column}")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -195,9 +203,10 @@ def upsert_job(job: Dict, scores: Dict, auto_hide: bool = False) -> bool:
 
     if existing:
         conn.execute('''
-            UPDATE jobs SET last_seen=?, score_1=?, score_2=?, score_3=?
+            UPDATE jobs SET last_seen=?, score_1=?, score_2=?, score_3=?,
+                            description=COALESCE(NULLIF(description, ''), ?)
             WHERE source=? AND id=?
-        ''', (now, *_score_slots(scores), job["source"], job["id"]))
+        ''', (now, *_score_slots(scores), job.get("description"), job["source"], job["id"]))
         conn.commit()
         conn.close()
         return False
@@ -205,26 +214,60 @@ def upsert_job(job: Dict, scores: Dict, auto_hide: bool = False) -> bool:
     conn.execute('''
         INSERT INTO jobs (id, source, url, title, company, location, salary,
                          category, tags, job_type, publication_date,
-                         first_seen, last_seen, score_1, score_2, score_3, hidden)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         first_seen, last_seen, score_1, score_2, score_3, hidden, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (job["id"], job["source"], job["url"], job["title"], job["company_name"],
           job.get("candidate_required_location"), job.get("salary"),
           job.get("category"), json.dumps(job.get("tags", [])),
           job.get("job_type"), job.get("publication_date"),
-          now, now, *_score_slots(scores), 1 if auto_hide else 0))
+          now, now, *_score_slots(scores), 1 if auto_hide else 0, job.get("description")))
     conn.commit()
     conn.close()
     return True
 
 
-def get_unnotified(min_score: int = 30) -> List[Dict]:
-    """Get jobs with high scores that haven't been notified."""
+def set_verdict(source: str, job_id: int, fit: int, role: str, reason: str,
+                hide: bool = False):
+    """Store the judge's verdict; hide=True takes a poor match off the board."""
+    conn = get_db()
+    conn.execute('''
+        UPDATE jobs SET fit=?, fit_role=?, fit_reason=?, hidden=MAX(hidden, ?)
+        WHERE source=? AND id=?
+    ''', (fit, role, reason, 1 if hide else 0, source, job_id))
+    conn.commit()
+    conn.close()
+
+
+def hide_duplicates() -> int:
+    """Hide visible jobs that repeat another visible job's title and company
+    (one posting listed by two sources). Keeps the best judged fit, then the
+    oldest row. Returns how many were hidden."""
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT source, id, lower(trim(title)) AS t, lower(trim(company)) AS c
+        FROM jobs WHERE hidden=0
+        ORDER BY fit IS NULL, fit DESC, first_seen
+    ''').fetchall()
+    seen, hidden = set(), 0
+    for r in rows:
+        key = (r["t"], r["c"])
+        if key in seen:
+            conn.execute("UPDATE jobs SET hidden=1 WHERE source=? AND id=?", (r["source"], r["id"]))
+            hidden += 1
+        seen.add(key)
+    conn.commit()
+    conn.close()
+    return hidden
+
+
+def get_unnotified(min_fit: int) -> List[Dict]:
+    """Get visible judged matches that haven't been notified."""
     conn = get_db()
     rows = conn.execute('''
         SELECT * FROM jobs
-        WHERE notified=0 AND (score_1>=? OR score_2>=? OR score_3>=?)
-        ORDER BY MAX(score_1, score_2, score_3) DESC
-    ''', (min_score, min_score, min_score)).fetchall()
+        WHERE notified=0 AND hidden=0 AND fit>=?
+        ORDER BY fit DESC
+    ''', (min_fit,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -238,7 +281,8 @@ def mark_notified(source: str, job_id: int):
 
 
 def get_jobs(min_score: int = 30, include_hidden: bool = False) -> List[Dict]:
-    """Get all jobs above score threshold, excluding applied/hidden jobs."""
+    """Get jobs for the board, best judged fit first, excluding applied/hidden jobs.
+    min_score applies to the keyword scores; unjudged jobs sort last."""
     conn = get_db()
     hidden_clause = "" if include_hidden else "AND hidden=0"
     rows = conn.execute(f'''
@@ -249,7 +293,7 @@ def get_jobs(min_score: int = 30, include_hidden: bool = False) -> List[Dict]:
             WHERE applications.job_source = jobs.source
             AND applications.job_id = jobs.id
         )
-        ORDER BY publication_date DESC, MAX(score_1, score_2, score_3) DESC
+        ORDER BY fit IS NULL, fit DESC, publication_date DESC
     ''', (min_score, min_score, min_score)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -384,7 +428,8 @@ def update_application(app_id: int, **fields):
     fields["updated_at"] = datetime.utcnow().isoformat()
     # Auto-set date_applied when status changes to Applied
     if fields.get("status") == "2-Applied" and "date_applied" not in fields:
-        fields["date_applied"] = datetime.utcnow().strftime("%Y-%m-%d")
+        row = conn.execute("SELECT date_applied FROM applications WHERE id=?", (app_id,)).fetchone()
+        fields["date_applied"] = (row["date_applied"] if row else None) or datetime.utcnow().strftime("%Y-%m-%d")
     # Read the previous status before writing, so we can record the transition.
     new_status = fields.get("status")
     prev_status = None
