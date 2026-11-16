@@ -69,7 +69,7 @@ Generation is pure Python: `render_cv(data, spec)` owns one shared layout, and e
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/cv-build.yml`) triggers on changes to data/, templates/, scripts/. Builds all variants in parallel using `ghcr.io/xu-cheng/texlive-debian:latest`, runs the tests, creates a GitHub release with PDFs.
+GitHub Actions builds variants with the pinned TeX Live image, runs tests and validates applications. Main updates the `cv-latest` rolling prerelease. Version tags run the same build and publish a template release with PDFs and ATS text files. See README.md for the release process.
 
 ## Adding New Variants
 

@@ -23,6 +23,7 @@ on:
       - '.claude/skills/**'
       - '.github/workflows/cv-build.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -115,13 +116,13 @@ jobs:
           GH_REPO: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          if gh api "repos/$GH_REPO/git/ref/tags/latest" > /dev/null 2>&1; then
-            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/latest" -f sha="$COMMIT_SHA" -F force=true > /dev/null
+          if gh api "repos/$GH_REPO/git/ref/tags/cv-latest" > /dev/null 2>&1; then
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/cv-latest" -f sha="$COMMIT_SHA" -F force=true > /dev/null
           else
-            gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/latest -f sha="$COMMIT_SHA" > /dev/null
+            gh api --method POST "repos/$GH_REPO/git/refs" -f ref=refs/tags/cv-latest -f sha="$COMMIT_SHA" > /dev/null
           fi
-          if ! gh release view latest > /dev/null 2>&1; then
-            gh release create latest --title 'Latest CV build' --notes "Automated CV build from commit $COMMIT_SHA"
+          if ! gh release view cv-latest > /dev/null 2>&1; then
+            gh release create cv-latest --title 'Latest CV build' --notes "Automated CV build from commit $COMMIT_SHA" --prerelease --latest=false
           fi
-          gh release edit latest --title 'Latest CV build' --notes "Automated CV build from commit $COMMIT_SHA" --latest
-          find cv-artifacts -type f \( -name '*.pdf' -o -name '*.txt' \) -exec gh release upload latest --clobber {} +
+          gh release edit cv-latest --title 'Latest CV build' --notes "Automated CV build from commit $COMMIT_SHA" --prerelease --latest=false
+          find cv-artifacts -type f \( -name '*.pdf' -o -name '*.txt' \) -exec gh release upload cv-latest --clobber {} +

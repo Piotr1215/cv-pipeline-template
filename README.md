@@ -342,7 +342,16 @@ Run `make ci` with Docker or Podman installed. It runs the pinned TeX Live image
 
 The image is set once in `TEXLIVE_IMAGE` in the Makefile. To update it, choose a TeX Live image tag, verify its registry digest, update the tag and digest together, and run `make ci` before submitting the change. GitHub Actions reads the same value from the Makefile.
 
-Successful builds on `main` update one rolling release. Download a variant from `https://github.com/<owner>/<repo>/releases/latest/download/<variant>.pdf`, for example `https://github.com/<owner>/<repo>/releases/latest/download/devops-engineer.pdf`.
+Successful builds on `main` update the `cv-latest` rolling prerelease. Download a variant from `https://github.com/<owner>/<repo>/releases/download/cv-latest/<variant>.pdf`, for example `https://github.com/<owner>/<repo>/releases/download/cv-latest/devops-engineer.pdf`.
+
+
+## Releasing the template
+
+From an up-to-date `main`, create an annotated tag with `git tag -a vX.Y.Z -m "Release vX.Y.Z"` and push it with `git push origin vX.Y.Z`. The release includes example PDFs and ATS text files. GitHub generates release notes from merged PR titles.
+
+A major version changes a `data/*.yaml` schema or `application.yaml` overlay in a way that needs fork edits. A minor version adds features or variants while keeping existing data working. A patch fixes bugs.
+
+To update a fork, run `git remote add upstream https://github.com/Piotr1215/cv-pipeline-template.git` once, then `git fetch upstream --tags` and `git merge vX.Y.Z`. A repository created with "Use this template" has unrelated history: add `--allow-unrelated-histories` on its first merge, or cherry-pick the changes instead. Review and resolve conflicts before completing the update.
 
 ## Troubleshooting
 
