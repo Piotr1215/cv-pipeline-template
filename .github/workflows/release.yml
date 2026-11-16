@@ -11,6 +11,12 @@ permissions:
 jobs:
   build:
     uses: ./.github/workflows/cv-build.yml
+    # Ceiling for the called workflow. GitHub checks every nested job's
+    # permissions at startup, including the rolling release job that asks for
+    # contents: write and is skipped on tag runs. The build jobs still run
+    # with cv-build.yml's own contents: read.
+    permissions:
+      contents: write
 
   publish:
     needs: build
