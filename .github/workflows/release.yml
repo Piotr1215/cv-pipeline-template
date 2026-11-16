@@ -1,0 +1,51 @@
+name: Release template
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/cv-build.yml
+    # Ceiling for the called workflow. GitHub checks every nested job's
+    # permissions at startup, including the rolling release job that asks for
+    # contents: write and is skipped on tag runs. The build jobs still run
+    # with cv-build.yml's own contents: read.
+    permissions:
+      contents: write
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: cv-artifacts
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists" >&2
+            exit 1
+          fi
+          files=()
+          for variant in software-developer devops-engineer cloud-engineer; do
+            for extension in pdf txt; do
+              mapfile -t matches < <(find "cv-artifacts/cv-$variant" -type f -name "$variant.$extension")
+              if [ "${#matches[@]}" -ne 1 ]; then
+                echo "Expected one $variant.$extension artifact, found ${#matches[@]}" >&2
+                exit 1
+              fi
+              files+=("${matches[0]}")
+            done
+          done
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --latest --title "$GITHUB_REF_NAME" "${files[@]}"

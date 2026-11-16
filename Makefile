@@ -5,7 +5,9 @@ DATA_DIR = data
 TEMPLATE_DIR = templates
 OUTPUT_DIR = output/generated
 # Use the project virtualenv if present (run `make setup` once), else system python3.
-PYTHON := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
+VENV ?= .venv
+TEXLIVE_IMAGE := ghcr.io/xu-cheng/texlive-debian:20261001@sha256:78ac2204b8df113aca0561e8f173ad5b89ee51e90795173d2fe9bcf0fbce162e
 
 all: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf) test
 
@@ -63,7 +65,7 @@ $(OUTPUT_DIR)/%.pdf: $(OUTPUT_DIR)/%.tex
 	@cp $(TEMPLATE_DIR)/altacv-class/*.cls $(OUTPUT_DIR)/ 2>/dev/null || true
 	@cp $(TEMPLATE_DIR)/altacv-class/*.cfg $(OUTPUT_DIR)/ 2>/dev/null || true
 	@echo "==> Compiling $*.tex to PDF..."
-	cd $(OUTPUT_DIR) && pdflatex -interaction=nonstopmode -halt-on-error $*.tex
+	@cd $(OUTPUT_DIR) && { pdflatex -interaction=nonstopmode -halt-on-error $*.tex || { sed -n '/^!/{p; :a; n; p; ba;}' $*.log | head -30; exit 1; }; }
 	@echo ""
 	@echo "==> Validating PDF..."
 	@pdfinfo $@ | head -5
@@ -82,9 +84,7 @@ cloud-engineer: $(OUTPUT_DIR)/cloud-engineer.pdf
 test: $(foreach v,$(VARIANTS),$(OUTPUT_DIR)/$(v).pdf)
 	@echo "==> Running data completeness tests..."
 	@$(PYTHON) scripts/test_data_completeness.py
-	@echo "==> Running phase-5 substrate tests..."
-	@$(PYTHON) scripts/test_phase5_substrate.py
-	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections
+	@$(MAKE) --no-print-directory test-substrate PYTHON=$(PYTHON)
 
 # Generate ATS-friendly plain-text versions (independent of LaTeX)
 ATS_OUTPUT_DIR = output/ats
@@ -95,10 +95,13 @@ $(ATS_OUTPUT_DIR)/%.txt: $(DATA_DIR)/*.yaml scripts/generate_ats.py
 ats-all: $(foreach v,$(VARIANTS),$(ATS_OUTPUT_DIR)/$(v).txt)
 	@echo "✓ All ATS-friendly versions generated in $(ATS_OUTPUT_DIR)"
 
-# Phase-5 outcome substrate tests only (timeline + composition snapshots).
+# Every hermetic test (no PDFs needed): each scripts/test_*.py except the
+# PDF completeness check, so a new test file runs without editing this list.
 test-substrate:
-	@$(PYTHON) scripts/test_phase5_substrate.py
-	@$(PYTHON) -m unittest scripts.test_application_integrity scripts.test_optional_sections
+	@set -e; for f in scripts/test_*.py; do \
+		m=$$(basename $$f .py); [ "$$m" = test_data_completeness ] && continue; \
+		echo "==> $$m"; $(PYTHON) -m scripts.$$m; \
+	done
 
 # Clean all generated files
 clean:
@@ -135,3 +138,38 @@ open:
 
 open-app:
 	@$(PYTHON) -m scripts.application open $(SLUG)
+
+# The same inner targets run in GitHub Actions and the local container.
+.PHONY: ci ci-inner ci-variant ci-applications ci-setup print-texlive-image
+print-texlive-image:
+	@echo $(TEXLIVE_IMAGE)
+
+ci-setup:
+	apt-get update
+	apt-get install -y python3 python3-venv poppler-utils make
+	python3 -m venv $(VENV)
+	$(VENV)/bin/python -m pip install -r requirements.txt
+
+ci-variant:
+	$(MAKE) -B $(OUTPUT_DIR)/$(VARIANT).pdf $(ATS_OUTPUT_DIR)/$(VARIANT).txt PYTHON=$(PYTHON)
+	$(PYTHON) scripts/test_data_completeness.py --variant $(VARIANT)
+
+ci-applications:
+	$(PYTHON) -m scripts.application build-all
+
+ci-inner:
+	$(MAKE) ci-setup
+	@for variant in $(VARIANTS); do $(MAKE) ci-variant VARIANT=$$variant PYTHON=$(VENV)/bin/python || exit $$?; done
+	$(MAKE) test-substrate PYTHON=$(VENV)/bin/python
+	$(MAKE) ci-applications PYTHON=$(VENV)/bin/python
+
+# The venv lives inside the container, and a rootful runtime hands the build
+# output back to you, so `make ci` leaves no root-owned files in the checkout.
+ci:
+	@runtime=$$(command -v docker || command -v podman) || { echo "Install docker or podman to run CI" >&2; exit 1; }; \
+	owner="$$(id -u):$$(id -g)"; \
+	case "$$runtime" in *podman) owner= ;; esac; \
+	"$$runtime" info 2>/dev/null | grep -qi rootless && owner=; \
+	"$$runtime" run --rm -e CI_OWNER="$$owner" -e PYTHONDONTWRITEBYTECODE=1 \
+		-v "$(CURDIR):/workspace" -w /workspace $(TEXLIVE_IMAGE) \
+		sh -c 'make ci-inner VENV=/opt/venv; rc=$$?; [ -z "$$CI_OWNER" ] || chown -R "$$CI_OWNER" output applications; exit $$rc'
